@@ -77,9 +77,15 @@ abstract class WebSocketClientAdapter<T> implements IWebSocketClientAdapter<T> {
 
 class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSocket> {
   onConnectCallback: () => void;
+  onMessageCallback: (data: string) => void;
+  onErrorCallback: (error: Error) => void;
+  onCloseCallback: () => void;
   constructor() {
     super();
     this.onConnectCallback = () => {};
+    this.onMessageCallback = (data: string) => {};
+    this.onErrorCallback = (error: Error) => {};
+    this.onCloseCallback = () => {};
   }
   connect(): Promise<void> {
     console.log(this.constructor.name, 'connect');
@@ -92,9 +98,17 @@ class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSocket> {
         this.onConnectCallback();
         resolve();
       });
+      this.client.addEventListener('message', (event) => {
+        this.onMessageCallback(event.data);
+      });
+      this.client.addEventListener('error', (event) => {
+        this.onErrorCallback(event as unknown as Error);
+      });
+      this.client.addEventListener('close', () => {
+        this.onCloseCallback();
+      });
     });
   }
-
   disconnect() {
     this.client?.close();
   }
@@ -104,17 +118,15 @@ class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSocket> {
   }
 
   onMessage(callback: (data: string) => void): void {
-    this.client?.addEventListener('message', (event) => callback(event.data));
+    this.onMessageCallback = callback;
   }
 
   onError(callback: (error: Error) => void): void {
-    this.client?.addEventListener('error', (event) =>
-      callback(event as unknown as Error)
-    );
+    this.onErrorCallback = callback;
   }
 
   onClose(callback: () => void): void {
-    this.client?.addEventListener('close', callback);
+    this.onCloseCallback = callback;
   }
 
   onConnect(callback: () => void): void {
@@ -136,7 +148,7 @@ export class WebSocketClient implements IWebSocketClient {
   connect(): Promise<void> {
     return this.#client.connect();
   }
-  disconnect(): void {
+  disconnect() {
     return this.#client.disconnect();
   }
   send(message: string): void {

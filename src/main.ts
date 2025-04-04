@@ -1,35 +1,4 @@
-import {
-  WebSocketClient,
-  windowWebsocket1,
-  windowWebsocket2,
-  // windowWebsocket2,
-} from './lib/WebSocketClient';
-
-// windowWebsocket1.connect().then(() => {
-//   console.log(windowWebsocket1.constructor.name, 'connected');
-//   windowWebsocket1.send('Hello');
-// });
-
-// windowWebsocket2.connect().then(() => {
-//   console.log(windowWebsocket2.constructor.name, 'connected');
-//   windowWebsocket2.send('Hello');
-// });
-
-// windowWebsocket1.onMessage((message) => {
-//   console.log(windowWebsocket1.constructor.name, 'message', message);
-// });
-
-// windowWebsocket2.onMessage((message) => {
-//   console.log(windowWebsocket2.constructor.name, 'message', message);
-// });
-
-// windowWebsocket1.onClose(() => {
-//   console.log(windowWebsocket1.constructor.name, 'closed');
-// });
-
-// windowWebsocket2.onClose(() => {
-//   console.log(windowWebsocket2.constructor.name, 'closed');
-// });
+import { WebSocketClient, windowWebsocket1 } from './lib/WebSocketClient';
 
 // 웹소켓 채팅 페이지 구현
 document.addEventListener('DOMContentLoaded', () => {
