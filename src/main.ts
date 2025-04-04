@@ -2,33 +2,34 @@ import {
   WebSocketClient,
   windowWebsocket1,
   windowWebsocket2,
+  // windowWebsocket2,
 } from './lib/WebSocketClient';
 
-windowWebsocket1.connect().then(() => {
-  console.log(windowWebsocket1.constructor.name, 'connected');
-  windowWebsocket1.send('Hello');
-});
+// windowWebsocket1.connect().then(() => {
+//   console.log(windowWebsocket1.constructor.name, 'connected');
+//   windowWebsocket1.send('Hello');
+// });
 
-windowWebsocket2.connect().then(() => {
-  console.log(windowWebsocket2.constructor.name, 'connected');
-  windowWebsocket2.send('Hello');
-});
+// windowWebsocket2.connect().then(() => {
+//   console.log(windowWebsocket2.constructor.name, 'connected');
+//   windowWebsocket2.send('Hello');
+// });
 
-windowWebsocket1.onMessage((message) => {
-  console.log(windowWebsocket1.constructor.name, 'message', message);
-});
+// windowWebsocket1.onMessage((message) => {
+//   console.log(windowWebsocket1.constructor.name, 'message', message);
+// });
 
-windowWebsocket2.onMessage((message) => {
-  console.log(windowWebsocket2.constructor.name, 'message', message);
-});
+// windowWebsocket2.onMessage((message) => {
+//   console.log(windowWebsocket2.constructor.name, 'message', message);
+// });
 
-windowWebsocket1.onClose(() => {
-  console.log(windowWebsocket1.constructor.name, 'closed');
-});
+// windowWebsocket1.onClose(() => {
+//   console.log(windowWebsocket1.constructor.name, 'closed');
+// });
 
-windowWebsocket2.onClose(() => {
-  console.log(windowWebsocket2.constructor.name, 'closed');
-});
+// windowWebsocket2.onClose(() => {
+//   console.log(windowWebsocket2.constructor.name, 'closed');
+// });
 
 // 웹소켓 채팅 페이지 구현
 document.addEventListener('DOMContentLoaded', () => {
@@ -127,9 +128,10 @@ document.addEventListener('DOMContentLoaded', () => {
     addSystemMessage('서버에 연결 시도 중...');
 
     try {
-      client = new WebSocketClient(new WindowWebSocketClientAdapter());
+      client = windowWebsocket1;
 
       client.onConnect(() => {
+        console.log('연결 성공1');
         statusDisplay.textContent = '연결 상태: 연결됨';
         statusDisplay.style.color = 'green';
         addSystemMessage('서버에 연결되었습니다.');
@@ -168,7 +170,9 @@ document.addEventListener('DOMContentLoaded', () => {
         client = null;
       });
 
-      client.connect();
+      client.connect().then(() => {
+        console.log('연결 성공');
+      });
     } catch (error) {
       statusDisplay.textContent = '연결 상태: 연결 실패';
       statusDisplay.style.color = 'red';

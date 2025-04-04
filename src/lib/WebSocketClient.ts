@@ -76,15 +76,22 @@ abstract class WebSocketClientAdapter<T> implements IWebSocketClientAdapter<T> {
 }
 
 class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSocket> {
+  onConnectCallback: () => void;
+  constructor() {
+    super();
+    this.onConnectCallback = () => {};
+  }
   connect(): Promise<void> {
     console.log(this.constructor.name, 'connect');
     return new Promise((resolve) => {
       if (!this.client) {
         this.client = new WebSocket('ws://localhost:8010');
       }
-      this.client.onopen = () => {
+      this.client.addEventListener('open', () => {
+        console.log(this.constructor.name, 'open');
+        this.onConnectCallback();
         resolve();
-      };
+      });
     });
   }
 
@@ -111,8 +118,10 @@ class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSocket> {
   }
 
   onConnect(callback: () => void): void {
-    this.client?.addEventListener('open', callback);
+    this.onConnectCallback = callback;
+    console.log(this.constructor.name, 'onConnect', this.client, callback);
   }
+
   networkStatus(): number {
     return this.client?.readyState ?? WebSocket.CLOSED;
   }
@@ -128,7 +137,7 @@ export class WebSocketClient implements IWebSocketClient {
     return this.#client.connect();
   }
   disconnect(): void {
-    throw new Error('Method not implemented.');
+    return this.#client.disconnect();
   }
   send(message: string): void {
     this.#client.send(message);
@@ -143,6 +152,7 @@ export class WebSocketClient implements IWebSocketClient {
     this.#client.onClose(callback);
   }
   onConnect(callback: () => void): void {
+    console.log(this.constructor.name, 'onConnect', this.#client, callback);
     this.#client.onConnect(callback);
   }
   get client() {
