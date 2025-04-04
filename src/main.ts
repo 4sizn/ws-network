@@ -1,4 +1,8 @@
-import { windowWebsocket1, windowWebsocket2 } from './lib/WebSocketClient';
+import {
+  WebSocketClient,
+  windowWebsocket1,
+  windowWebsocket2,
+} from './lib/WebSocketClient';
 
 windowWebsocket1.connect().then(() => {
   console.log(windowWebsocket1.constructor.name, 'connected');
@@ -91,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
   applyStyles();
 
   // 웹소켓 클라이언트 관리
-  let client: WindowWebSocketClient | null = null;
+  let client: WebSocketClient | null = null;
 
   // 연결 버튼 클릭 이벤트
   connectButton.addEventListener('click', () => {
@@ -118,18 +122,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 웹소켓 초기화 함수
   function initializeWebSocket() {
-    // 웹소켓 서버 URL (실제 서버 URL로 변경하세요)
-    const serverUrl = 'ws://localhost:8010';
-
     statusDisplay.textContent = '연결 상태: 연결 시도 중...';
     statusDisplay.style.color = 'blue';
     addSystemMessage('서버에 연결 시도 중...');
 
     try {
-      client.connect();
+      client = new WebSocketClient(new WindowWebSocketClientAdapter());
 
-      // 연결 성공 이벤트
-      socket?.addEventListener('open', () => {
+      client.onConnect(() => {
         statusDisplay.textContent = '연결 상태: 연결됨';
         statusDisplay.style.color = 'green';
         addSystemMessage('서버에 연결되었습니다.');
@@ -139,14 +139,11 @@ document.addEventListener('DOMContentLoaded', () => {
         sendButton.disabled = false;
       });
 
-      // 메시지 수신 이벤트
-      socket?.addEventListener('message', (event: MessageEvent) => {
-        const message = event.data;
+      client.onMessage((message) => {
         addMessage('받음', message);
       });
 
-      // 오류 발생 이벤트
-      socket?.addEventListener('error', (error: Event) => {
+      client.onError((error) => {
         statusDisplay.textContent = '연결 상태: 오류 발생';
         statusDisplay.style.color = 'red';
         addSystemMessage('연결 오류가 발생했습니다.');
@@ -159,15 +156,10 @@ document.addEventListener('DOMContentLoaded', () => {
         client = null;
       });
 
-      // 연결 종료 이벤트
-      socket?.addEventListener('close', (event: CloseEvent) => {
-        if (event.wasClean) {
-          statusDisplay.textContent = `연결 상태: 정상 종료 (코드: ${event.code})`;
-        } else {
-          statusDisplay.textContent = '연결 상태: 연결 끊김';
-          statusDisplay.style.color = 'red';
-          addSystemMessage('서버와의 연결이 끊겼습니다.');
-        }
+      client.onClose(() => {
+        statusDisplay.textContent = '연결 상태: 연결 끊김';
+        statusDisplay.style.color = 'red';
+        addSystemMessage('서버와의 연결이 끊겼습니다.');
 
         connectButton.disabled = false;
         disconnectButton.disabled = true;
@@ -175,6 +167,8 @@ document.addEventListener('DOMContentLoaded', () => {
         sendButton.disabled = true;
         client = null;
       });
+
+      client.connect();
     } catch (error) {
       statusDisplay.textContent = '연결 상태: 연결 실패';
       statusDisplay.style.color = 'red';
@@ -193,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const message = textarea.value.trim();
     if (message && client) {
-      client.client.send(message);
+      client.send(message);
       addMessage('보냄', message);
       textarea.value = '';
     } else if (!client) {
