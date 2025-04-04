@@ -1,0 +1,15 @@
+{
+  "name": "inetwork-test-server",
+  "version": "1.0.0",
+  "description": "테스트용 WebSocket 서버",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.14.2",
+    "http": "^0.0.1-security",
+    "fs": "^0.0.1-security",
+    "path": "^0.12.7"
+  }
+}
