@@ -9,7 +9,11 @@ client.onMessage((message) => {
 });
 
 self.onmessage = (event) => {
-  client.send(event.data);
+  if (event.data === 'ping') {
+    self.postMessage('pong');
+  } else {
+    client.send(event.data);
+  }
 };
 
 self.onerror = (event) => {

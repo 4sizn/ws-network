@@ -12,13 +12,15 @@ const windowWebsocket1 = new WebSocketClient(
 
 const windowWebsocket2 = new WindowWebSocketClient();
 
-const worker = new Worker('./lib/workers/socket-workers.ts');
-
+const worker = new Worker(
+  new URL('./lib/workers/socket-workers.ts', import.meta.url),
+  { type: 'module' }
+);
 worker.onmessage = (event) => {
   console.log(event.data);
 };
 
-worker.postMessage('Hello, worker!');
+worker.postMessage('ping');
 
 document.addEventListener('DOMContentLoaded', () => {
   // HTML 요소 생성 및 스타일 적용
