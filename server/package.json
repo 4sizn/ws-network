@@ -1,15 +1,20 @@
 {
-  "name": "inetwork-test-server",
+  "name": "ws-network-server",
   "version": "1.0.0",
-  "description": "테스트용 WebSocket 서버",
-  "main": "server.js",
+  "description": "WebSocket server in TypeScript",
+  "main": "dist/server.js",
   "scripts": {
-    "start": "node server.js"
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node src/server.ts"
   },
   "dependencies": {
-    "ws": "^8.14.2",
-    "http": "^0.0.1-security",
-    "fs": "^0.0.1-security",
-    "path": "^0.12.7"
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.10",
+    "@types/node": "^20.11.24",
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2"
   }
-}
+} 
