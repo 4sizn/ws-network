@@ -63,7 +63,9 @@ interface IWebSocketClientAdapter<T> {
   onConnect(callback: () => void): void;
 }
 
-abstract class WebSocketClientAdapter<T> implements IWebSocketClientAdapter<T> {
+export abstract class WebSocketClientAdapter<T>
+  implements IWebSocketClientAdapter<T>
+{
   protected client?: T;
   public abstract connect(): Promise<void>;
   public abstract disconnect(): void;
@@ -75,7 +77,7 @@ abstract class WebSocketClientAdapter<T> implements IWebSocketClientAdapter<T> {
   public abstract networkStatus(): number;
 }
 
-class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSocket> {
+export class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSocket> {
   onConnectCallback: () => void;
   onMessageCallback: (data: string) => void;
   onErrorCallback: (error: Error) => void;
@@ -175,7 +177,7 @@ export class WebSocketClient implements IWebSocketClient {
   }
 }
 
-class WindowWebSocketClient extends WebSocketClient {
+export class WindowWebSocketClient extends WebSocketClient {
   constructor() {
     super(new WindowWebSocketClientAdapter());
   }
@@ -191,11 +193,3 @@ class WindowWebSocketClient extends WebSocketClient {
     this.client.send(message);
   }
 }
-
-const windowWebsocket1 = new WebSocketClient(
-  new WindowWebSocketClientAdapter()
-);
-
-const windowWebsocket2 = new WindowWebSocketClient();
-
-export { windowWebsocket1, windowWebsocket2 };

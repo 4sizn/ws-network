@@ -1,10 +1,24 @@
 import {
   WebSocketClient,
-  windowWebsocket1,
-  windowWebsocket2,
+  WindowWebSocketClient,
+  WindowWebSocketClientAdapter,
 } from './lib/WebSocketClient';
 
 // 웹소켓 채팅 페이지 구현
+
+const windowWebsocket1 = new WebSocketClient(
+  new WindowWebSocketClientAdapter()
+);
+
+const windowWebsocket2 = new WindowWebSocketClient();
+
+const worker = new Worker('./lib/workers/socket-workers.ts');
+
+worker.onmessage = (event) => {
+  console.log(event.data);
+};
+
+worker.postMessage('Hello, worker!');
 
 document.addEventListener('DOMContentLoaded', () => {
   // HTML 요소 생성 및 스타일 적용
