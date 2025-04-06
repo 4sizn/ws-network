@@ -116,8 +116,8 @@ document.addEventListener('DOMContentLoaded', () => {
     addSystemMessage('서버에 연결 시도 중...');
 
     try {
-      // client = windowWebsocket1;
-      client = windowWebsocket2;
+      // 매번 새로운 인스턴스 생성
+      client = new WindowWebSocketClient();
 
       client.onConnect(() => {
         console.log('연결 성공1');
