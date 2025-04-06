@@ -1,6 +1,11 @@
-import { WebSocketClient, windowWebsocket1 } from './lib/WebSocketClient';
+import {
+  WebSocketClient,
+  windowWebsocket1,
+  windowWebsocket2,
+} from './lib/WebSocketClient';
 
 // 웹소켓 채팅 페이지 구현
+
 document.addEventListener('DOMContentLoaded', () => {
   // HTML 요소 생성 및 스타일 적용
   const app = document.createElement('div');
@@ -97,7 +102,8 @@ document.addEventListener('DOMContentLoaded', () => {
     addSystemMessage('서버에 연결 시도 중...');
 
     try {
-      client = windowWebsocket1;
+      // client = windowWebsocket1;
+      client = windowWebsocket2;
 
       client.onConnect(() => {
         console.log('연결 성공1');
