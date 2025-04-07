@@ -1,55 +1,82 @@
 import {
+  StompWebSocketClientAdapter,
   WebSocketClient,
   WindowWebSocketClient,
   WindowWebSocketClientAdapter,
-} from './lib/WebSocketClient';
+  StompWebSocketClient,
+} from "./lib/WebSocketClient";
 
 // 웹소켓 채팅 페이지 구현
 
-const windowWebsocket1 = new WebSocketClient(
-  new WindowWebSocketClientAdapter()
-);
+// const windowWebsocket1 = new WebSocketClient(
+//   new WindowWebSocketClientAdapter()
+// );
 
-const windowWebsocket2 = new WindowWebSocketClient();
+// const windowWebsocket2 = new WindowWebSocketClient();
 
-const worker = new Worker(
-  new URL('./lib/workers/socket-workers.ts', import.meta.url),
-  { type: 'module' }
-);
-worker.onmessage = (event) => {
-  console.log(event.data);
-};
+const stompWebsocket = new WebSocketClient(new StompWebSocketClientAdapter());
+stompWebsocket.connect();
 
-worker.postMessage('ping');
+// stompWebsocket.onError((error) => {
+//   console.error(error);
+// });
 
-document.addEventListener('DOMContentLoaded', () => {
+// const worker = new Worker(
+//   new URL("./lib/workers/socket-workers.ts", import.meta.url),
+//   { type: "module" }
+// );
+// worker.onmessage = (event) => {
+//   console.log(event.data);
+// };
+
+// worker.postMessage("ping");
+
+document.addEventListener("DOMContentLoaded", () => {
+  const login = document.createElement("button");
+  login.textContent = "로그인";
+  login.addEventListener("click", () => {
+    // stompWebsocket.publish("login", "로그인 요청");
+  });
+
+  const loginlogoutbox = document.createElement("div");
+  loginlogoutbox.className = "connection-controls";
+
+  const logout = document.createElement("button");
+  logout.textContent = "로그아웃";
+  logout.addEventListener("click", () => {
+    // stompWebsocket.publish("logout", "로그아웃 요청");
+  });
+
+  loginlogoutbox.appendChild(login);
+  loginlogoutbox.appendChild(logout);
+
   // HTML 요소 생성 및 스타일 적용
-  const app = document.createElement('div');
-  app.className = 'chat-app';
+  const app = document.createElement("div");
+  app.className = "chat-app";
 
   // 통신 상태 표시 영역
-  const statusDisplay = document.createElement('div');
-  statusDisplay.className = 'status-display';
-  statusDisplay.textContent = '연결 상태: 연결되지 않음';
-  statusDisplay.style.color = 'gray';
+  const statusDisplay = document.createElement("div");
+  statusDisplay.className = "status-display";
+  statusDisplay.textContent = "연결 상태: 연결되지 않음";
+  statusDisplay.style.color = "gray";
 
   // 채팅 메시지 표시 영역
-  const chatMessages = document.createElement('div');
-  chatMessages.className = 'chat-messages';
+  const chatMessages = document.createElement("div");
+  chatMessages.className = "chat-messages";
 
   // 연결 제어 버튼 영역
-  const connectionControls = document.createElement('div');
-  connectionControls.className = 'connection-controls';
+  const connectionControls = document.createElement("div");
+  connectionControls.className = "connection-controls";
 
   // 연결하기 버튼
-  const connectButton = document.createElement('button');
-  connectButton.className = 'control-button connect-button';
-  connectButton.textContent = '연결하기';
+  const connectButton = document.createElement("button");
+  connectButton.className = "control-button connect-button";
+  connectButton.textContent = "연결하기";
 
   // 연결 끊기 버튼
-  const disconnectButton = document.createElement('button');
-  disconnectButton.className = 'control-button disconnect-button';
-  disconnectButton.textContent = '연결 끊기';
+  const disconnectButton = document.createElement("button");
+  disconnectButton.className = "control-button disconnect-button";
+  disconnectButton.textContent = "연결 끊기";
   disconnectButton.disabled = true;
 
   // 연결 제어 버튼들을 영역에 추가
@@ -57,25 +84,26 @@ document.addEventListener('DOMContentLoaded', () => {
   connectionControls.appendChild(disconnectButton);
 
   // 메시지 입력 폼
-  const form = document.createElement('form');
-  form.className = 'message-form';
+  const form = document.createElement("form");
+  form.className = "message-form";
 
   // 메시지 입력 textarea
-  const textarea = document.createElement('textarea');
-  textarea.className = 'message-input';
-  textarea.placeholder = '메시지를 입력하세요...';
+  const textarea = document.createElement("textarea");
+  textarea.className = "message-input";
+  textarea.placeholder = "메시지를 입력하세요...";
   textarea.disabled = true;
 
   // 전송 버튼
-  const sendButton = document.createElement('button');
-  sendButton.className = 'send-button';
-  sendButton.textContent = '전송';
-  sendButton.type = 'submit';
+  const sendButton = document.createElement("button");
+  sendButton.className = "send-button";
+  sendButton.textContent = "전송";
+  sendButton.type = "submit";
   sendButton.disabled = true;
 
   // 요소들을 DOM에 추가
   form.appendChild(textarea);
   form.appendChild(sendButton);
+  app.appendChild(loginlogoutbox);
   app.appendChild(statusDisplay);
   app.appendChild(connectionControls);
   app.appendChild(chatMessages);
@@ -89,19 +117,19 @@ document.addEventListener('DOMContentLoaded', () => {
   let client: WebSocketClient | null = null;
 
   // 연결 버튼 클릭 이벤트
-  connectButton.addEventListener('click', () => {
+  connectButton.addEventListener("click", () => {
     initializeWebSocket();
     connectButton.disabled = true;
     disconnectButton.disabled = false;
   });
 
   // 연결 끊기 버튼 클릭 이벤트
-  disconnectButton.addEventListener('click', () => {
+  disconnectButton.addEventListener("click", () => {
     if (client) {
       client.disconnect();
-      statusDisplay.textContent = '연결 상태: 사용자에 의해 연결 끊김';
-      statusDisplay.style.color = 'gray';
-      addSystemMessage('사용자가 연결을 종료했습니다.');
+      statusDisplay.textContent = "연결 상태: 사용자에 의해 연결 끊김";
+      statusDisplay.style.color = "gray";
+      addSystemMessage("사용자가 연결을 종료했습니다.");
 
       connectButton.disabled = false;
       disconnectButton.disabled = true;
@@ -113,19 +141,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 웹소켓 초기화 함수
   function initializeWebSocket() {
-    statusDisplay.textContent = '연결 상태: 연결 시도 중...';
-    statusDisplay.style.color = 'blue';
-    addSystemMessage('서버에 연결 시도 중...');
+    statusDisplay.textContent = "연결 상태: 연결 시도 중...";
+    statusDisplay.style.color = "blue";
+    addSystemMessage("서버에 연결 시도 중...");
 
     try {
       // 매번 새로운 인스턴스 생성
-      client = new WindowWebSocketClient();
+      // client = new WindowWebSocketClient();
+
+      // client = new WebSocketClient(new WindowWebSocketClientAdapter());
+      client = new StompWebSocketClient();
 
       client.onConnect(() => {
-        console.log('연결 성공1');
-        statusDisplay.textContent = '연결 상태: 연결됨';
-        statusDisplay.style.color = 'green';
-        addSystemMessage('서버에 연결되었습니다.');
+        console.log("연결 성공1");
+        statusDisplay.textContent = "연결 상태: 연결됨";
+        statusDisplay.style.color = "green";
+        addSystemMessage("서버에 연결되었습니다.");
 
         // 입력창과 전송 버튼 활성화
         textarea.disabled = false;
@@ -133,14 +164,14 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       client.onMessage((message) => {
-        addMessage('받음', message);
+        addMessage("받음", message);
       });
 
       client.onError((error) => {
-        statusDisplay.textContent = '연결 상태: 오류 발생';
-        statusDisplay.style.color = 'red';
-        addSystemMessage('연결 오류가 발생했습니다.');
-        console.error('WebSocket error:', error);
+        statusDisplay.textContent = "연결 상태: 오류 발생";
+        statusDisplay.style.color = "red";
+        addSystemMessage("연결 오류가 발생했습니다.");
+        console.error("WebSocket error:", error);
 
         connectButton.disabled = false;
         disconnectButton.disabled = true;
@@ -150,9 +181,9 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       client.onClose(() => {
-        statusDisplay.textContent = '연결 상태: 연결 끊김';
-        statusDisplay.style.color = 'red';
-        addSystemMessage('서버와의 연결이 끊겼습니다.');
+        statusDisplay.textContent = "연결 상태: 연결 끊김";
+        statusDisplay.style.color = "red";
+        addSystemMessage("서버와의 연결이 끊겼습니다.");
 
         connectButton.disabled = false;
         disconnectButton.disabled = true;
@@ -162,13 +193,13 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       client.connect().then(() => {
-        console.log('연결 성공');
+        console.log("연결 성공");
       });
     } catch (error) {
-      statusDisplay.textContent = '연결 상태: 연결 실패';
-      statusDisplay.style.color = 'red';
-      addSystemMessage('서버 연결에 실패했습니다.');
-      console.error('WebSocket connection error:', error);
+      statusDisplay.textContent = "연결 상태: 연결 실패";
+      statusDisplay.style.color = "red";
+      addSystemMessage("서버 연결에 실패했습니다.");
+      console.error("WebSocket connection error:", error);
 
       connectButton.disabled = false;
       disconnectButton.disabled = true;
@@ -177,32 +208,32 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 폼 제출 이벤트 처리
-  form.addEventListener('submit', (e) => {
+  form.addEventListener("submit", (e) => {
     e.preventDefault();
 
     const message = textarea.value.trim();
     if (message && client) {
       client.send(message);
-      addMessage('보냄', message);
-      textarea.value = '';
+      addMessage("보냄", message);
+      textarea.value = "";
     } else if (!client) {
       addSystemMessage(
-        '서버에 연결되어 있지 않습니다. 메시지를 보낼 수 없습니다.'
+        "서버에 연결되어 있지 않습니다. 메시지를 보낼 수 없습니다."
       );
     }
   });
 
   // 메시지 추가 함수
   function addMessage(type: string, content: string) {
-    const messageElement = document.createElement('div');
+    const messageElement = document.createElement("div");
     messageElement.className = `message ${type.toLowerCase()}-message`;
 
-    const typeSpan = document.createElement('span');
-    typeSpan.className = 'message-type';
+    const typeSpan = document.createElement("span");
+    typeSpan.className = "message-type";
     typeSpan.textContent = `[${type}]`;
 
-    const contentSpan = document.createElement('span');
-    contentSpan.className = 'message-content';
+    const contentSpan = document.createElement("span");
+    contentSpan.className = "message-content";
     contentSpan.textContent = content;
 
     messageElement.appendChild(typeSpan);
@@ -215,8 +246,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 시스템 메시지 추가 함수
   function addSystemMessage(content: string) {
-    const messageElement = document.createElement('div');
-    messageElement.className = 'system-message';
+    const messageElement = document.createElement("div");
+    messageElement.className = "system-message";
     messageElement.textContent = content;
     chatMessages.appendChild(messageElement);
 
@@ -226,7 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 스타일 적용 함수
   function applyStyles() {
-    const style = document.createElement('style');
+    const style = document.createElement("style");
     style.textContent = `
       .chat-app {
         max-width: 600px;
