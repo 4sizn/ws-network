@@ -87,10 +87,10 @@ export abstract class WebSocketClientAdapter<T>
   public abstract connect(): Promise<void>;
   public abstract disconnect(): void;
   public abstract send(data: string): void;
-  public abstract onMessage(callback: (data: string) => void): void;
-  public abstract onError(callback: (error: Error) => void): void;
-  public abstract onClose(callback: () => void): void;
-  public abstract onConnect(callback: () => void): void;
+  public abstract onMessage(args: unknown): void;
+  public abstract onError(args: unknown): void;
+  public abstract onClose(args: unknown): void;
+  public abstract onConnect(args: unknown): void;
   public abstract networkStatus(): number;
 }
 
@@ -204,10 +204,6 @@ export class StompWebSocketClientAdapter
     throw new Error('Method not implemented.');
   }
   public onMessage(callback: (data: string) => void): void {}
-  public onError(callback: (error: Error) => void): void {
-    // callback?.();
-    // throw new Error("Method not implemented.");
-  }
   public onClose(callback: () => void): void {
     throw new Error('Method not implemented.');
   }
