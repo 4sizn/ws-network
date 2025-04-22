@@ -1,4 +1,4 @@
-import { Client as StompClient, StompSubscription } from '@stomp/stompjs';
+import { Client as StompClient, StompSubscription } from "@stomp/stompjs";
 
 interface PubSubAble<T> {
   subscriptions: Record<string, T>;
@@ -27,35 +27,35 @@ interface IWebSocketPlugin {
 }
 
 class LoggingPlugin implements IWebSocketPlugin {
-  name = 'LoggingPlugin';
+  name = "LoggingPlugin";
 
   onBeforeConnect() {
-    console.log('[LoggingPlugin] 연결을 시도합니다...');
+    console.log("[LoggingPlugin] 연결을 시도합니다...");
   }
 
   onAfterConnect() {
-    console.log('[LoggingPlugin] 연결되었습니다.');
+    console.log("[LoggingPlugin] 연결되었습니다.");
   }
 
   onBeforeSend(data: string) {
-    console.log('[LoggingPlugin] 메시지 전송:', data);
+    console.log("[LoggingPlugin] 메시지 전송:", data);
     return data;
   }
 
   onAfterSend() {
-    console.log('[LoggingPlugin] 메시지가 전송되었습니다.');
+    console.log("[LoggingPlugin] 메시지가 전송되었습니다.");
   }
 
   onBeforeDisconnect() {
-    console.log('[LoggingPlugin] 연결 종료를 시도합니다...');
+    console.log("[LoggingPlugin] 연결 종료를 시도합니다...");
   }
 
   onAfterDisconnect() {
-    console.log('[LoggingPlugin] 연결이 종료되었습니다.');
+    console.log("[LoggingPlugin] 연결이 종료되었습니다.");
   }
 
   onMessage(data: string) {
-    console.log('[LoggingPlugin] 메시지 수신:', data);
+    console.log("[LoggingPlugin] 메시지 수신:", data);
   }
 }
 
@@ -101,6 +101,9 @@ export class StompWebSocketClientAdapter
   protected client?: StompClient;
   subscriptions: Record<string, StompSubscription> = {};
   onConnectCallback: (() => void) | undefined;
+  onMessageCallback: (data: string) => void;
+  onErrorCallback: ((error: Error) => void) | undefined;
+  onCloseCallback: (() => void) | undefined;
   constructor(client?: StompClient) {
     super();
     this.client = client;
@@ -129,7 +132,7 @@ export class StompWebSocketClientAdapter
       destination: topic,
       body: message,
       headers: {
-        'content-type': 'application/json',
+        "content-type": "application/json",
       },
     });
   }
@@ -151,7 +154,7 @@ export class StompWebSocketClientAdapter
     topic: string,
     message: string,
     headers = {
-      'content-type': 'application/json',
+      "content-type": "application/json",
     }
   ): void {
     this.client?.publish({
@@ -174,26 +177,40 @@ export class StompWebSocketClientAdapter
 
   public connect(): Promise<void> {
     return new Promise((resolve) => {
-      console.log(this.constructor.name, 'connect');
+      console.log(this.constructor.name, "connect");
       this.client = new StompClient({
-        brokerURL: 'wss://stapapp.rfice.com/websocket/connect',
+        brokerURL: "wss://stapapp.rfice.com/websocket/connect",
         heartbeatIncoming: 0,
         heartbeatOutgoing: 0,
         reconnectDelay: 5000,
         connectHeaders: {
           authorization:
-            'eyJraWQiOiJkZTViZjNkOC03NGE5LTQ0NjMtYWE2Yy0yNTgzNWViNzk0NGQiLCJ0eXAiOiJKV1QiLCJhbGciOiJFZERTQSJ9.eyJpc3MiOiJodHRwczovL3N0YXBhcHAucmZpY2UuY29tIiwic3ViIjoiMjc4NTQxYTUtN2IzOS00NDQyLWE2NDctZWU0OWQ5MTZhMGMwIiwidW4iOiJoc3NoaW5AcnN1cHBvcnQuY29tIiwiYXUiOiJHVUVTVCwgVVNFUiIsImV4cCI6MTc0NDAyMjA3NSwiaWF0IjoxNzQ0MDE0ODc1fQ.q35SAgSaGtuYW-1_ycj6swhJTMGtE76xBQyr2aKuu5E7i8Y8gwuVOG7V7Bf0s-oS7xTiOL8bL8Ltn-hEIHYSCw',
-          'device-type': 'WEB',
-          'device-key':
-            'f7hhzpZ7K0pFbgthJwQAFyMozp5bKsnN3RGLTM016rTL8UXQBZjU1qrsws0HFc_l',
-          'app-version': '1.0.0',
+            "eyJraWQiOiJkZTViZjNkOC03NGE5LTQ0NjMtYWE2Yy0yNTgzNWViNzk0NGQiLCJ0eXAiOiJKV1QiLCJhbGciOiJFZERTQSJ9.eyJpc3MiOiJodHRwczovL3N0YXBhcHAucmZpY2UuY29tIiwic3ViIjoiMjc4NTQxYTUtN2IzOS00NDQyLWE2NDctZWU0OWQ5MTZhMGMwIiwidW4iOiJoc3NoaW5AcnN1cHBvcnQuY29tIiwiYXUiOiJHVUVTVCwgVVNFUiIsImV4cCI6MTc0NTMxODI0NywiaWF0IjoxNzQ1MzExMDQ3fQ.f-TEvkPHa9Ep8mzoMyT6_2qKHYn7SZi30mBlb14aY6Rra7vCwEbvLRwOuxIwqRSa5u4EB7GXP509fP8G5SXdBg",
+          "device-type": "WEB",
+          "device-key":
+            "f7hhzpZ7K0pFbgthJwQAFyMozp5bKsnN3RGLTM016rTL8UXQBZjU1qrsws0HFc_l",
+          "app-version": "1.0.0",
         },
       });
+
       this.client.activate();
       this.client.onConnect = () => {
-        console.log(this.constructor.name, 'onConnect');
+        console.log(this.constructor.name, "onConnect");
         this.onConnectCallback?.();
         resolve();
+      };
+      this.client.onStompError = (error) => {
+        this.onErrorCallback?.(error);
+      };
+
+      this.client.onWebSocketError = (error) => {
+        this.onErrorCallback?.(error);
+      };
+      this.client.onWebSocketClose = () => {
+        this.onCloseCallback?.();
+      };
+      this.client.onDisconnect = () => {
+        this.onCloseCallback?.();
       };
     });
   }
@@ -201,18 +218,23 @@ export class StompWebSocketClientAdapter
     this.client?.deactivate();
   }
   public send(data: string): void {
-    throw new Error('Method not implemented.');
+    throw new Error("Method not implemented.");
   }
-  public onMessage(callback: (data: string) => void): void {}
+  public onMessage(callback: (data: string) => void): void {
+    this.onMessageCallback = callback;
+  }
   public onClose(callback: () => void): void {
-    throw new Error('Method not implemented.');
+    this.onCloseCallback = callback;
   }
   public onConnect(callback: () => void): void {
-    console.log(this.constructor.name, 'onConnect', this.client, callback);
+    console.log(this.constructor.name, "onConnect", this.client, callback);
     this.onConnectCallback = callback;
   }
+  public onError(callback: (error: Error) => void): void {
+    this.onErrorCallback = callback;
+  }
   public networkStatus(): number {
-    throw new Error('Method not implemented.');
+    throw new Error("Method not implemented.");
   }
 }
 
@@ -229,23 +251,23 @@ export class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSock
     this.onCloseCallback = () => {};
   }
   connect(): Promise<void> {
-    console.log(this.constructor.name, 'connect');
+    console.log(this.constructor.name, "connect");
     return new Promise((resolve) => {
       if (!this.client) {
-        this.client = new WebSocket('ws://localhost:8010');
+        this.client = new WebSocket("ws://localhost:8010");
       }
-      this.client.addEventListener('open', () => {
-        console.log(this.constructor.name, 'open');
+      this.client.addEventListener("open", () => {
+        console.log(this.constructor.name, "open");
         this.onConnectCallback();
         resolve();
       });
-      this.client.addEventListener('message', (event) => {
+      this.client.addEventListener("message", (event) => {
         this.onMessageCallback(event.data);
       });
-      this.client.addEventListener('error', (event) => {
+      this.client.addEventListener("error", (event) => {
         this.onErrorCallback(event as unknown as Error);
       });
-      this.client.addEventListener('close', () => {
+      this.client.addEventListener("close", () => {
         this.onCloseCallback();
       });
     });
@@ -272,7 +294,7 @@ export class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSock
 
   onConnect(callback: () => void): void {
     this.onConnectCallback = callback;
-    console.log(this.constructor.name, 'onConnect', this.client, callback);
+    console.log(this.constructor.name, "onConnect", this.client, callback);
   }
 
   networkStatus(): number {
@@ -305,7 +327,7 @@ export class WebSocketClient<T = any> implements IWebSocketClient {
     this.#client.onClose(callback);
   }
   onConnect(callback: () => void): void {
-    console.log(this.constructor.name, 'onConnect', this.#client, callback);
+    console.log(this.constructor.name, "onConnect", this.#client, callback);
     this.#client.onConnect(callback);
   }
   get client() {

@@ -1,9 +1,11 @@
 import {
   StompWebSocketClient,
   StompWebSocketClientAdapter,
+  // StompWebSocketClient,
+  // StompWebSocketClientAdapter,
   WebSocketClient,
-  WindowWebSocketClient,
-  WindowWebSocketClientAdapter,
+  // WindowWebSocketClient,
+  // WindowWebSocketClientAdapter,
 } from "./lib/WebSocketClient";
 
 // 웹소켓 채팅 페이지 구현
@@ -21,26 +23,28 @@ import {
 //   console.error(error);
 // });
 
-const worker = new Worker(
-  new URL("./lib/workers/socket-workers.ts", import.meta.url),
-  { type: "module" }
-);
-worker.onmessage = (event) => {
-  console.log(event.data);
-};
-worker.postMessage("ping");
+// const worker = new Worker(
+//   new URL("./lib/workers/socket-workers.ts", import.meta.url),
+//   { type: "module" }
+// );
 
-const worker2 = new SharedWorker(
-  new URL("./lib/workers/shared-socket-workers.ts", import.meta.url),
-  { type: "module" }
-);
+// worker.onmessage = (event) => {
+//   console.log(event.data);
+// };
 
-worker2.port.onmessage = (event) => {
-  console.log(event.data);
-};
+// worker.postMessage("ping");
 
-worker2.port.start();
-worker2.port.postMessage("ping");
+// const worker2 = new SharedWorker(
+//   new URL("./lib/workers/shared-socket-workers.ts", import.meta.url),
+//   { type: "module" }
+// );
+
+// worker2.port.onmessage = (event) => {
+//   console.log(event.data);
+// };
+
+// worker2.port.start();
+// worker2.port.postMessage("ping");
 
 document.addEventListener("DOMContentLoaded", () => {
   const login = document.createElement("button");
@@ -158,10 +162,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       // 매번 새로운 인스턴스 생성
-      client = new WindowWebSocketClient();
+      // client = new WindowWebSocketClient();
 
       // client = new WebSocketClient(new WindowWebSocketClientAdapter());
+      client = new WebSocketClient(new StompWebSocketClientAdapter());
+      client.publish("login", "로그인 요청");
       // client = new StompWebSocketClient();
+      // client
 
       client.onConnect(() => {
         console.log("연결 성공1");
