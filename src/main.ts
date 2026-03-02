@@ -1,11 +1,11 @@
 import {
-  StompWebSocketClientAdapter,
   // StompWebSocketClient,
   // StompWebSocketClientAdapter,
   WebSocketClient,
   WindowWebSocketClient,
   // WindowWebSocketClientAdapter,
 } from "./lib/WebSocketClient";
+import { StompWebSocketClient } from './lib/protocols/stomp';
 
 // 웹소켓 채팅 페이지 구현
 
@@ -169,13 +169,12 @@ document.addEventListener("DOMContentLoaded", () => {
         | undefined;
 
       if (stompBrokerURL) {
-        client = new WebSocketClient(
-          new StompWebSocketClientAdapter({
-            brokerURL: stompBrokerURL,
-            connectHeaders: {},
-          })
-        );
-        client.publish("login", "로그인 요청");
+        const stompClient = new StompWebSocketClient({
+          brokerURL: stompBrokerURL,
+          connectHeaders: {},
+        });
+        client = stompClient;
+        stompClient.publish('login', '로그인 요청');
       } else {
         if (!wsUrl) {
           throw new Error(
