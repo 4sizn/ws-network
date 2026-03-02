@@ -1,5 +1,0 @@
-- [x] Validate adapter pattern + public API surface (WebSocketClient, adapters)
-- [x] Validate web worker support implementation and usage guidance
-- [x] Validate plugin interface implementation status and example plugins
-- [x] Validate reported caveats (hardcoded URL, reconnect/heartbeat, plugin execution)
-- [x] Produce final ws-network web-based WebSocket report (Korean) grounded in source

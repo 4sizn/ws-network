@@ -1,5 +1,0 @@
-- [x] Context scan: identify STOMP surface and native WebSocket surface in `src/lib/`
-- [x] Refactor public API to be native-WebSocket-first (keep STOMP optional/isolated)
-- [x] Update demo (`src/main.ts`) and workers to use native WebSocket path by default
-- [x] Ensure no STOMP-only methods exist on the generic client (no `publish/subscribe` on base)
-- [x] Verify: `npm run build` and `npm run lint` pass; run `npm run dev` smoke check

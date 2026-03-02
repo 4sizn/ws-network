@@ -1,3 +1,0 @@
-- [x] Normalize worker message protocol to typed envelope only (no raw+typed mixing)
-- [x] Remove console logging from library/worker code paths (keep explicit opt-in logging only)
-- [x] Verify: `npm run build` and `npm run lint` pass
