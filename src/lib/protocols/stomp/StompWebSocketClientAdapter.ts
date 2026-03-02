@@ -1,20 +1,4 @@
 import { Client as StompClient, StompSubscription } from '@stomp/stompjs';
-import { WebSocketClientAdapter } from '../../WebSocketClient';
-
-interface PubSubAble<T> {
-  subscriptions: Record<string, T>;
-  subscribe(
-    topic: string | string[],
-    callback: (message: string) => void,
-  ): void;
-  unsubscribe(topic: string | string[]): void;
-  publish(topic: string | string[], message: string): void;
-  isSubscribed(topic: string | string[]): boolean;
-  _subscribe(topic: string, callback: (message: string) => void): void;
-  _unsubscribe(topic: string): void;
-  _publish(topic: string, message: string): void;
-  _isSubscribed(topic: string): boolean;
-}
 
 export interface StompWebSocketClientAdapterOptions {
   brokerURL: string;
@@ -24,113 +8,38 @@ export interface StompWebSocketClientAdapterOptions {
   reconnectDelay?: number;
 }
 
-export class StompWebSocketClientAdapter
-  extends WebSocketClientAdapter<StompClient>
-  implements PubSubAble<StompSubscription>
-{
+export type StompListenerUnsubscribe = () => void;
+
+export class StompWebSocketClientAdapter {
   #brokerURL: string;
   #connectHeaders?: Record<string, string>;
   #heartbeatIncoming: number;
   #heartbeatOutgoing: number;
   #reconnectDelay: number;
-
-  protected client?: StompClient;
-  subscriptions: Record<string, StompSubscription> = {};
-  onConnectCallback: (() => void) | undefined;
-  onMessageCallback: (data: string) => void = () => {};
-  onErrorCallback: ((error: Error) => void) | undefined;
-  onCloseCallback: (() => void) | undefined;
+  #client?: StompClient;
+  #onConnectListeners: Set<() => void>;
+  #onCloseListeners: Set<() => void>;
+  #onErrorListeners: Set<(error: Error) => void>;
+  #subscriptions: Record<string, StompSubscription> = {};
 
   constructor(
     options: StompWebSocketClientAdapterOptions,
     client?: StompClient,
   ) {
-    super();
     this.#brokerURL = options.brokerURL;
     this.#connectHeaders = options.connectHeaders;
     this.#heartbeatIncoming = options.heartbeatIncoming ?? 0;
     this.#heartbeatOutgoing = options.heartbeatOutgoing ?? 0;
     this.#reconnectDelay = options.reconnectDelay ?? 5000;
-    this.client = client;
+    this.#client = client;
+    this.#onConnectListeners = new Set();
+    this.#onCloseListeners = new Set();
+    this.#onErrorListeners = new Set();
   }
 
-  public unsubscribe(topic: string | string[]): void {
-    if (Array.isArray(topic)) {
-      for (const t of topic) {
-        this._unsubscribe(t);
-      }
-    } else {
-      this._unsubscribe(topic);
-    }
-  }
-
-  _subscribe(topic: string, callback: (message: string) => void): void {
-    const subscription = this.client?.subscribe(topic, (message) => {
-      const body = (message as { body?: unknown }).body;
-      callback(typeof body === 'string' ? body : '');
-    });
-    if (subscription) {
-      this.subscriptions[topic] = subscription;
-    }
-  }
-
-  _unsubscribe(topic: string): void {
-    delete this.subscriptions[topic];
-  }
-
-  _publish(topic: string, message: string): void {
-    this.client?.publish({
-      destination: topic,
-      body: message,
-      headers: {
-        'content-type': 'application/json',
-      },
-    });
-  }
-
-  public subscribe(
-    topic: string[] | string,
-    callback: (message: string) => void,
-  ): void {
-    if (Array.isArray(topic)) {
-      for (const t of topic) {
-        this._subscribe(t, callback);
-      }
-    } else {
-      this._subscribe(topic, callback);
-    }
-  }
-
-  public publish(
-    topic: string | string[],
-    message: string,
-    headers = {
-      'content-type': 'application/json',
-    },
-  ): void {
-    if (Array.isArray(topic)) {
-      for (const t of topic) {
-        this._publish(t, message);
-      }
-      return;
-    }
-    this.client?.publish({ destination: topic, body: message, headers });
-  }
-
-  public isSubscribed(topic: string[] | string): boolean {
-    if (Array.isArray(topic)) {
-      return topic.every((t) => this._isSubscribed(t));
-    }
-    return this._isSubscribed(topic);
-  }
-
-  _isSubscribed(topic: string): boolean {
-    return this.subscriptions[topic] !== undefined;
-  }
-
-  public connect(): Promise<void> {
-    return new Promise((resolve) => {
-      this.client = new StompClient({
+  connect(): Promise<void> {
+    if (!this.#client) {
+      this.#client = new StompClient({
         brokerURL: this.#brokerURL,
         heartbeatIncoming: this.#heartbeatIncoming,
         heartbeatOutgoing: this.#heartbeatOutgoing,
@@ -138,58 +47,116 @@ export class StompWebSocketClientAdapter
         connectHeaders: this.#connectHeaders,
       });
 
-      this.client.activate();
-      this.client.onConnect = () => {
-        this.onConnectCallback?.();
-        resolve();
+      this.#client.onConnect = () => {
+        for (const listener of this.#onConnectListeners) {
+          listener();
+        }
       };
-      this.client.onStompError = (frame) => {
+      this.#client.onStompError = (frame) => {
         const body = (frame as { body?: unknown }).body;
         const message = typeof body === 'string' ? body : 'STOMP error';
-        this.onErrorCallback?.(new Error(message));
+        this.#emitError(new Error(message));
       };
-
-      this.client.onWebSocketError = (event) => {
-        this.onErrorCallback?.(
-          new Error(
-            `WebSocket error: ${(event as { type?: unknown }).type ?? ''}`,
-          ),
+      this.#client.onWebSocketError = (event) => {
+        this.#emitError(
+          new Error(`WebSocket error: ${(event as { type?: unknown }).type ?? ''}`),
         );
       };
-      this.client.onWebSocketClose = () => {
-        this.onCloseCallback?.();
+      this.#client.onWebSocketClose = () => {
+        this.#clearSubscriptions();
+        for (const listener of this.#onCloseListeners) {
+          listener();
+        }
       };
-      this.client.onDisconnect = () => {
-        this.onCloseCallback?.();
+      this.#client.onDisconnect = () => {
+        this.#clearSubscriptions();
+        for (const listener of this.#onCloseListeners) {
+          listener();
+        }
       };
+    }
+
+    if (this.#client.connected || this.#client.active) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      const unsubscribe = this.onConnect(() => {
+        unsubscribe();
+        resolve();
+      });
+      this.#client?.activate();
     });
   }
 
-  public disconnect(): void {
-    this.client?.deactivate();
+  disconnect(): void {
+    this.#client?.deactivate();
   }
 
-  public send(_data: string): void {
-    throw new Error('Method not implemented.');
+  publish(
+    destination: string,
+    message: string,
+    headers: Record<string, string> = {
+      'content-type': 'application/json',
+    },
+  ): void {
+    this.#client?.publish({
+      destination,
+      body: message,
+      headers,
+    });
   }
 
-  public onMessage(callback: (data: string) => void): void {
-    this.onMessageCallback = callback;
+  subscribe(destination: string, callback: (message: string) => void): void {
+    if (!this.#client) {
+      return;
+    }
+
+    if (this.#subscriptions[destination]) {
+      this.#subscriptions[destination].unsubscribe();
+    }
+
+    const subscription = this.#client.subscribe(destination, (message) => {
+      const body = (message as { body?: unknown }).body;
+      callback(typeof body === 'string' ? body : '');
+    });
+
+    this.#subscriptions[destination] = subscription;
   }
 
-  public onClose(callback: () => void): void {
-    this.onCloseCallback = callback;
+  unsubscribe(destination: string): void {
+    this.#subscriptions[destination]?.unsubscribe();
+    delete this.#subscriptions[destination];
   }
 
-  public onConnect(callback: () => void): void {
-    this.onConnectCallback = callback;
+  onConnect(callback: () => void): StompListenerUnsubscribe {
+    this.#onConnectListeners.add(callback);
+    return () => {
+      this.#onConnectListeners.delete(callback);
+    };
   }
 
-  public onError(callback: (error: Error) => void): void {
-    this.onErrorCallback = callback;
+  onClose(callback: () => void): StompListenerUnsubscribe {
+    this.#onCloseListeners.add(callback);
+    return () => {
+      this.#onCloseListeners.delete(callback);
+    };
   }
 
-  public networkStatus(): number {
-    throw new Error('Method not implemented.');
+  onError(callback: (error: Error) => void): StompListenerUnsubscribe {
+    this.#onErrorListeners.add(callback);
+    return () => {
+      this.#onErrorListeners.delete(callback);
+    };
+  }
+
+  #clearSubscriptions(): void {
+    this.#subscriptions = {};
+  }
+
+  #emitError(error: Error): void {
+    for (const listener of this.#onErrorListeners) {
+      listener(error);
+    }
   }
 }
