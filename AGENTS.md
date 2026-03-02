@@ -41,6 +41,13 @@ This repo is a local bundle of LLM/agent skills (mostly Markdown + a few scripts
 - Do not edit `.agent/skills/`, `.claude/skills/`, `.cline/skills/` directly; they are symlink mirrors.
 - Do not edit `.opencode/node_modules/` (generated vendored deps).
 
+## WS-NETWORK CODE RULES
+
+- TypeScript is strict and enforces `isolatedModules` + `noUnusedLocals` + `noUnusedParameters` (`tsconfig.json`).
+- Biome formatting uses 2-space indent, 80 columns, single quotes (`biome.json`).
+- Avoid hardcoded URLs and any secrets (tokens, keys) in `src/`; require config injection.
+- Preserve the adapter-based design in `src/lib/WebSocketClient.ts` and keep worker entrypoints under `src/lib/workers/`.
+
 ## COMMANDS
 ```bash
 # quick inventory

@@ -15,7 +15,7 @@ interface PubSubAble<T> {
   _isSubscribed(topic: string): boolean;
 }
 
-interface IWebSocketPlugin {
+export interface IWebSocketPlugin {
   name: string;
   onBeforeConnect?: () => void | Promise<void>;
   onAfterConnect?: () => void | Promise<void>;
@@ -26,7 +26,7 @@ interface IWebSocketPlugin {
   onMessage?: (data: string) => void | Promise<void>;
 }
 
-class LoggingPlugin implements IWebSocketPlugin {
+export class LoggingPlugin implements IWebSocketPlugin {
   name = "LoggingPlugin";
 
   onBeforeConnect() {
@@ -61,7 +61,7 @@ class LoggingPlugin implements IWebSocketPlugin {
 
 interface IWebSocketClient {
   status(): number;
-  connect(): void;
+  connect(): Promise<void>;
   disconnect(): void;
   send(message: string): void;
   onMessage(callback: (message: string) => void): void;
@@ -70,7 +70,7 @@ interface IWebSocketClient {
   onConnect(callback: () => void): void;
 }
 
-interface IWebSocketClientAdapter<T> {
+interface IWebSocketClientAdapter {
   connect(): Promise<void>;
   disconnect(): void;
   send(data: string): void;
@@ -81,7 +81,7 @@ interface IWebSocketClientAdapter<T> {
 }
 
 export abstract class WebSocketClientAdapter<T>
-  implements IWebSocketClientAdapter<T>
+  implements IWebSocketClientAdapter
 {
   protected client?: T;
   public abstract connect(): Promise<void>;
@@ -98,14 +98,35 @@ export class StompWebSocketClientAdapter
   extends WebSocketClientAdapter<StompClient>
   implements PubSubAble<StompSubscription>
 {
+  #brokerURL: string;
+  #connectHeaders?: Record<string, string>;
+  #heartbeatIncoming: number;
+  #heartbeatOutgoing: number;
+  #reconnectDelay: number;
+
   protected client?: StompClient;
   subscriptions: Record<string, StompSubscription> = {};
   onConnectCallback: (() => void) | undefined;
-  onMessageCallback: (data: string) => void;
+  onMessageCallback: (data: string) => void = () => {};
   onErrorCallback: ((error: Error) => void) | undefined;
   onCloseCallback: (() => void) | undefined;
-  constructor(client?: StompClient) {
+
+  constructor(
+    options: {
+      brokerURL: string;
+      connectHeaders?: Record<string, string>;
+      heartbeatIncoming?: number;
+      heartbeatOutgoing?: number;
+      reconnectDelay?: number;
+    },
+    client?: StompClient
+  ) {
     super();
+    this.#brokerURL = options.brokerURL;
+    this.#connectHeaders = options.connectHeaders;
+    this.#heartbeatIncoming = options.heartbeatIncoming ?? 0;
+    this.#heartbeatOutgoing = options.heartbeatOutgoing ?? 0;
+    this.#reconnectDelay = options.reconnectDelay ?? 5000;
     this.client = client;
   }
   public unsubscribe(topic: string | string[]): void {
@@ -118,11 +139,13 @@ export class StompWebSocketClientAdapter
     }
   }
   _subscribe(topic: string, callback: (message: string) => void): void {
-    //@ts-ignore
-    this.subscriptions[topic] = this.client?.subscribe(topic, (args) => {
-      this.onMessage(callback);
-      callback(args.body);
+    const subscription = this.client?.subscribe(topic, (message) => {
+      const body = (message as { body?: unknown }).body;
+      callback(typeof body === "string" ? body : "");
     });
+    if (subscription) {
+      this.subscriptions[topic] = subscription;
+    }
   }
   _unsubscribe(topic: string): void {
     delete this.subscriptions[topic];
@@ -151,17 +174,19 @@ export class StompWebSocketClientAdapter
   }
 
   public publish(
-    topic: string,
+    topic: string | string[],
     message: string,
     headers = {
       "content-type": "application/json",
     }
   ): void {
-    this.client?.publish({
-      destination: topic,
-      body: message,
-      headers,
-    });
+    if (Array.isArray(topic)) {
+      for (const t of topic) {
+        this._publish(t, message);
+      }
+      return;
+    }
+    this.client?.publish({ destination: topic, body: message, headers });
   }
 
   public isSubscribed(topic: string[] | string): boolean {
@@ -179,18 +204,11 @@ export class StompWebSocketClientAdapter
     return new Promise((resolve) => {
       console.log(this.constructor.name, "connect");
       this.client = new StompClient({
-        brokerURL: "wss://stapapp.rfice.com/websocket/connect",
-        heartbeatIncoming: 0,
-        heartbeatOutgoing: 0,
-        reconnectDelay: 5000,
-        connectHeaders: {
-          authorization:
-            "eyJraWQiOiJkZTViZjNkOC03NGE5LTQ0NjMtYWE2Yy0yNTgzNWViNzk0NGQiLCJ0eXAiOiJKV1QiLCJhbGciOiJFZERTQSJ9.eyJpc3MiOiJodHRwczovL3N0YXBhcHAucmZpY2UuY29tIiwic3ViIjoiMjc4NTQxYTUtN2IzOS00NDQyLWE2NDctZWU0OWQ5MTZhMGMwIiwidW4iOiJoc3NoaW5AcnN1cHBvcnQuY29tIiwiYXUiOiJHVUVTVCwgVVNFUiIsImV4cCI6MTc0NTMxODI0NywiaWF0IjoxNzQ1MzExMDQ3fQ.f-TEvkPHa9Ep8mzoMyT6_2qKHYn7SZi30mBlb14aY6Rra7vCwEbvLRwOuxIwqRSa5u4EB7GXP509fP8G5SXdBg",
-          "device-type": "WEB",
-          "device-key":
-            "f7hhzpZ7K0pFbgthJwQAFyMozp5bKsnN3RGLTM016rTL8UXQBZjU1qrsws0HFc_l",
-          "app-version": "1.0.0",
-        },
+        brokerURL: this.#brokerURL,
+        heartbeatIncoming: this.#heartbeatIncoming,
+        heartbeatOutgoing: this.#heartbeatOutgoing,
+        reconnectDelay: this.#reconnectDelay,
+        connectHeaders: this.#connectHeaders,
       });
 
       this.client.activate();
@@ -199,12 +217,16 @@ export class StompWebSocketClientAdapter
         this.onConnectCallback?.();
         resolve();
       };
-      this.client.onStompError = (error) => {
-        this.onErrorCallback?.(error);
+      this.client.onStompError = (frame) => {
+        const body = (frame as { body?: unknown }).body;
+        const message = typeof body === "string" ? body : "STOMP error";
+        this.onErrorCallback?.(new Error(message));
       };
 
-      this.client.onWebSocketError = (error) => {
-        this.onErrorCallback?.(error);
+      this.client.onWebSocketError = (event) => {
+        this.onErrorCallback?.(
+          new Error(`WebSocket error: ${(event as { type?: unknown }).type ?? ""}`)
+        );
       };
       this.client.onWebSocketClose = () => {
         this.onCloseCallback?.();
@@ -217,7 +239,7 @@ export class StompWebSocketClientAdapter
   public disconnect(): void {
     this.client?.deactivate();
   }
-  public send(data: string): void {
+  public send(_data: string): void {
     throw new Error("Method not implemented.");
   }
   public onMessage(callback: (data: string) => void): void {
@@ -239,22 +261,25 @@ export class StompWebSocketClientAdapter
 }
 
 export class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSocket> {
+  #url: string;
   onConnectCallback: () => void;
   onMessageCallback: (data: string) => void;
   onErrorCallback: (error: Error) => void;
   onCloseCallback: () => void;
-  constructor() {
+
+  constructor(options: { url: string }) {
     super();
+    this.#url = options.url;
     this.onConnectCallback = () => {};
-    this.onMessageCallback = (data: string) => {};
-    this.onErrorCallback = (error: Error) => {};
+    this.onMessageCallback = () => {};
+    this.onErrorCallback = () => {};
     this.onCloseCallback = () => {};
   }
   connect(): Promise<void> {
     console.log(this.constructor.name, "connect");
     return new Promise((resolve) => {
       if (!this.client) {
-        this.client = new WebSocket("ws://localhost:8010");
+        this.client = new WebSocket(this.#url);
       }
       this.client.addEventListener("open", () => {
         console.log(this.constructor.name, "open");
@@ -302,7 +327,7 @@ export class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSock
   }
 }
 
-export class WebSocketClient<T = any> implements IWebSocketClient {
+export class WebSocketClient<T = unknown> implements IWebSocketClient {
   #client: WebSocketClientAdapter<T>;
 
   constructor(client: WebSocketClientAdapter<T>) {
@@ -311,8 +336,8 @@ export class WebSocketClient<T = any> implements IWebSocketClient {
   connect(): Promise<void> {
     return this.#client.connect();
   }
-  disconnect() {
-    return this.#client.disconnect();
+  disconnect(): void {
+    this.#client.disconnect();
   }
   send(message: string): void {
     this.#client.send(message);
@@ -336,11 +361,43 @@ export class WebSocketClient<T = any> implements IWebSocketClient {
   status(): number {
     return this.#client.networkStatus();
   }
+
+  publish(topic: string | string[], message: string): void {
+    const client = this.#client as unknown as PubSubAble<unknown>;
+    if (typeof client.publish !== "function") {
+      throw new Error("publish is not supported by this adapter");
+    }
+    client.publish(topic, message);
+  }
+
+  subscribe(topic: string | string[], callback: (message: string) => void): void {
+    const client = this.#client as unknown as PubSubAble<unknown>;
+    if (typeof client.subscribe !== "function") {
+      throw new Error("subscribe is not supported by this adapter");
+    }
+    client.subscribe(topic, callback);
+  }
+
+  unsubscribe(topic: string | string[]): void {
+    const client = this.#client as unknown as PubSubAble<unknown>;
+    if (typeof client.unsubscribe !== "function") {
+      throw new Error("unsubscribe is not supported by this adapter");
+    }
+    client.unsubscribe(topic);
+  }
+
+  isSubscribed(topic: string | string[]): boolean {
+    const client = this.#client as unknown as PubSubAble<unknown>;
+    if (typeof client.isSubscribed !== "function") {
+      throw new Error("isSubscribed is not supported by this adapter");
+    }
+    return client.isSubscribed(topic);
+  }
 }
 
 export class WindowWebSocketClient extends WebSocketClient<WebSocket> {
-  constructor() {
-    super(new WindowWebSocketClientAdapter());
+  constructor(options: { url: string }) {
+    super(new WindowWebSocketClientAdapter(options));
   }
   connect(): Promise<void> {
     return this.client.connect();
@@ -356,8 +413,14 @@ export class WindowWebSocketClient extends WebSocketClient<WebSocket> {
 }
 
 export class StompWebSocketClient extends WebSocketClient<StompClient> {
-  constructor() {
-    super(new StompWebSocketClientAdapter());
+  constructor(options: {
+    brokerURL: string;
+    connectHeaders?: Record<string, string>;
+    heartbeatIncoming?: number;
+    heartbeatOutgoing?: number;
+    reconnectDelay?: number;
+  }) {
+    super(new StompWebSocketClientAdapter(options));
   }
   connect(): Promise<void> {
     return this.client.connect();

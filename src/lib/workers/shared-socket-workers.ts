@@ -5,11 +5,21 @@ import { WindowWebSocketClient } from "../WebSocketClient";
 
 const ports: MessagePort[] = [];
 
+const wsUrl =
+  new URL(self.location.href).searchParams.get("wsUrl") ??
+  (import.meta as unknown as { env?: { VITE_WS_URL?: string } }).env?.VITE_WS_URL;
+
+if (!wsUrl) {
+  throw new Error(
+    'Missing WebSocket URL. Provide `?wsUrl=...` in worker URL or set `VITE_WS_URL`.'
+  );
+}
+
 self.onconnect = (event: MessageEvent) => {
   const port = event.ports[0];
   ports.push(port);
 
-  const client = new WindowWebSocketClient();
+  const client = new WindowWebSocketClient({ url: wsUrl });
 
   client.onMessage((message) => {
     for (const port of ports) {

@@ -1,6 +1,16 @@
 import { WindowWebSocketClient } from "../WebSocketClient";
 
-const client = new WindowWebSocketClient();
+const wsUrl =
+  new URL(self.location.href).searchParams.get("wsUrl") ??
+  (import.meta as unknown as { env?: { VITE_WS_URL?: string } }).env?.VITE_WS_URL;
+
+if (!wsUrl) {
+  throw new Error(
+    'Missing WebSocket URL. Provide `?wsUrl=...` in worker URL or set `VITE_WS_URL`.'
+  );
+}
+
+const client = new WindowWebSocketClient({ url: wsUrl });
 
 client.connect();
 

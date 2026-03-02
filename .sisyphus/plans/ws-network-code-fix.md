@@ -1,0 +1,5 @@
+- [x] Create fix branch `chore/ws-network-code-fix` and work only there
+- [x] Add AI coding rules so agents follow repo conventions (`.github/copilot-instructions.md`, update `AGENTS.md`)
+- [x] Fix root build failures so `npm run build` passes (TypeScript strict/noUnused/isolatedModules)
+- [x] Replace hardcoded WebSocket/STOMP URLs and sensitive connect headers with injectable configuration
+- [x] Verify: `npm run build` and `npm run lint` pass
