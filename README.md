@@ -45,9 +45,21 @@ client.onConnect(() => {
   client.send('hello');
 });
 
-client.onMessage((msg) => {
+const unsubscribeMessage = client.onMessage((msg) => {
   console.log('message:', msg);
 });
+
+const controller = new AbortController();
+client.onError(
+  (error) => {
+    console.error(error.message);
+  },
+  { signal: controller.signal },
+);
+
+// later
+unsubscribeMessage();
+controller.abort();
 
 await client.connect();
 ```
@@ -82,13 +94,36 @@ await client.connect();
 client.send('hello');
 ```
 
+### RxJS event streams
+
+`WebSocketClient` exposes hot multicast observables that are emitted from the
+same underlying adapter connection.
+
+```ts
+import { filter } from 'rxjs';
+
+const subscription = client.messages$
+  .pipe(filter((msg) => msg.length > 0))
+  .subscribe((msg) => {
+    console.log('stream message:', msg);
+  });
+
+const connectionSubscription = client.connected$.subscribe(() => {
+  console.log('connected');
+});
+
+// later
+subscription.unsubscribe();
+connectionSubscription.unsubscribe();
+```
+
 ## Plugins
 
 `IWebSocketPlugin` hooks run in this order:
 - connect: `onBeforeConnect` -> adapter connect -> `onAfterConnect`
 - send: `onBeforeSend` (transform chain) -> adapter send -> `onAfterSend`
 - disconnect: `onBeforeDisconnect` -> adapter disconnect -> `onAfterDisconnect`
-- inbound message: plugin `onMessage` hooks -> user `onMessage` callback
+- inbound message: plugin `onMessage` hooks -> user listeners -> `messages$`
 
 ## Workers
 
