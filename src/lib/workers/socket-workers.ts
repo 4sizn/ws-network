@@ -1,4 +1,4 @@
-import { WindowWebSocketClient } from '../WebSocketClient';
+import { WindowWebSocketClient } from "../WebSocketClient";
 
 const client = new WindowWebSocketClient();
 
@@ -9,8 +9,8 @@ client.onMessage((message) => {
 });
 
 self.onmessage = (event) => {
-  if (event.data === 'ping') {
-    self.postMessage('pong');
+  if (event.data === "ping") {
+    self.postMessage("pong");
   } else {
     client.send(event.data);
   }
@@ -21,27 +21,27 @@ self.onerror = (event) => {
 };
 
 self.onclose = () => {
-  console.log('worker closed');
+  console.log("worker closed");
 };
 
 client.onConnect(() => {
-  self.postMessage({ type: 'CONNECTED' });
+  self.postMessage({ type: "CONNECTED" });
 });
 
 client.onMessage((message) => {
   self.postMessage({
-    type: 'MESSAGE',
+    type: "MESSAGE",
     data: message,
   });
 });
 
 client.onError((error) => {
   self.postMessage({
-    type: 'ERROR',
+    type: "ERROR",
     error: error.message,
   });
 });
 
 client.onClose(() => {
-  self.postMessage({ type: 'CLOSED' });
+  self.postMessage({ type: "CLOSED" });
 });
