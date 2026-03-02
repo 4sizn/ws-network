@@ -1,53 +1,43 @@
+import { Client as StompClient } from '@stomp/stompjs';
+import { WebSocketClient } from '../../WebSocketClient';
 import {
   StompWebSocketClientAdapter,
-  type StompListenerUnsubscribe,
   type StompWebSocketClientAdapterOptions,
 } from './StompWebSocketClientAdapter';
 
-export type StompPublishHeaders = Record<string, string>;
-
-export class StompWebSocketClient {
-  #client: StompWebSocketClientAdapter;
-
+export class StompWebSocketClient extends WebSocketClient<StompClient> {
   constructor(options: StompWebSocketClientAdapterOptions) {
-    this.#client = new StompWebSocketClientAdapter(options);
+    super(new StompWebSocketClientAdapter(options));
   }
 
   connect(): Promise<void> {
-    return this.#client.connect();
+    return this.client.connect();
   }
 
-  disconnect(): void {
-    this.#client.disconnect();
+  disconnect() {
+    this.client.disconnect();
   }
 
-  publish(
-    destination: string,
-    message: string,
-    headers?: StompPublishHeaders,
+  private get adapter(): StompWebSocketClientAdapter {
+    return this.client as StompWebSocketClientAdapter;
+  }
+
+  publish(topic: string | string[], message: string): void {
+    this.adapter.publish(topic, message);
+  }
+
+  subscribe(
+    topic: string | string[],
+    callback: (message: string) => void,
   ): void {
-    this.#client.publish(destination, message, headers);
+    this.adapter.subscribe(topic, callback);
   }
 
-  subscribe(destination: string, callback: (message: string) => void): void {
-    this.#client.subscribe(destination, callback);
+  unsubscribe(topic: string | string[]): void {
+    this.adapter.unsubscribe(topic);
   }
 
-  unsubscribe(destination: string): void {
-    this.#client.unsubscribe(destination);
-  }
-
-  onConnect(callback: () => void): StompListenerUnsubscribe {
-    return this.#client.onConnect(callback);
-  }
-
-  onClose(callback: () => void): StompListenerUnsubscribe {
-    return this.#client.onClose(callback);
-  }
-
-  onError(callback: (error: Error) => void): StompListenerUnsubscribe {
-    return this.#client.onError(callback);
+  isSubscribed(topic: string | string[]): boolean {
+    return this.adapter.isSubscribed(topic);
   }
 }
-
-export type { StompWebSocketClientAdapterOptions };

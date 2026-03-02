@@ -5,7 +5,6 @@ Native browser WebSocket client with an adapter-based design.
 Notes:
 - This repo is currently `private: true` (see `package.json`), so examples below are repo-local.
 - STOMP support is opt-in and isolated under `src/lib/protocols/stomp/`.
-  - STOMP is a STOMP-specific client API (pub/sub). It is not a `WebSocketClient` adapter.
 
 ## Demo
 
@@ -145,28 +144,3 @@ Inbound (main thread -> worker) supports:
 
 URL injection for workers:
 - Pass `?wsUrl=...` in the worker URL, or set `VITE_WS_URL`.
-
-## STOMP (Opt-in)
-
-STOMP is provided as a separate, protocol-specific client:
-
-```ts
-import { StompWebSocketClient } from './src/lib/protocols/stomp';
-
-const stomp = new StompWebSocketClient({
-  brokerURL: 'wss://example.com/websocket/connect',
-  connectHeaders: {
-    // authorization, device keys, etc
-  },
-});
-
-stomp.onConnect(() => {
-  stomp.subscribe('/topic/chat', (message) => {
-    console.log('stomp message:', message);
-  });
-
-  stomp.publish('/app/chat', 'hello');
-});
-
-await stomp.connect();
-```
