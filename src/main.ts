@@ -1,11 +1,9 @@
 import {
   // StompWebSocketClient,
   // StompWebSocketClientAdapter,
-  WebSocketClient,
   WindowWebSocketClient,
   // WindowWebSocketClientAdapter,
 } from "./lib/WebSocketClient";
-import { StompWebSocketClient } from './lib/protocols/stomp';
 
 // 웹소켓 채팅 페이지 구현
 
@@ -128,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
   applyStyles();
 
   // 웹소켓 클라이언트 관리
-  let client: WebSocketClient | null = null;
+  let client: WindowWebSocketClient | null = null;
 
   // 연결 버튼 클릭 이벤트
   connectButton.addEventListener("click", () => {
@@ -169,20 +167,17 @@ document.addEventListener("DOMContentLoaded", () => {
         | undefined;
 
       if (stompBrokerURL) {
-        const stompClient = new StompWebSocketClient({
-          brokerURL: stompBrokerURL,
-          connectHeaders: {},
-        });
-        client = stompClient;
-        stompClient.publish('login', '로그인 요청');
-      } else {
-        if (!wsUrl) {
-          throw new Error(
-            "Missing VITE_WS_URL. Set it to use the native WebSocket adapter."
-          );
-        }
-        client = new WindowWebSocketClient({ url: wsUrl });
+        addSystemMessage(
+          'STOMP demo is separated from the generic WebSocket demo flow.',
+        );
       }
+
+      if (!wsUrl) {
+        throw new Error(
+          'Missing VITE_WS_URL. Set it to use the native WebSocket adapter.',
+        );
+      }
+      client = new WindowWebSocketClient({ url: wsUrl });
       // client = new StompWebSocketClient();
       // client
 
