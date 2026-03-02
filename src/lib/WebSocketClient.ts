@@ -47,7 +47,17 @@ export class LoggingPlugin implements IWebSocketPlugin {
   }
 }
 
-type WsNetworkLogger = Pick<Console, 'log' | 'error' | 'warn'>;
+export type WsNetworkLogger = Pick<Console, 'log' | 'error' | 'warn'>;
+
+export type WebSocketClientOptions = {
+  plugins?: IWebSocketPlugin[];
+  logger?: WsNetworkLogger;
+};
+
+export type WindowWebSocketClientOptions = WebSocketClientOptions & {
+  url: string;
+  logger?: WsNetworkLogger;
+};
 
 const noopLogger: WsNetworkLogger = {
   log: () => {},
@@ -166,7 +176,7 @@ export class WebSocketClient<T = unknown> implements IWebSocketClient {
 
   constructor(
     client: WebSocketClientAdapter<T>,
-    options?: { plugins?: IWebSocketPlugin[]; logger?: WsNetworkLogger },
+    options?: WebSocketClientOptions,
   ) {
     this.#client = client;
     this.#plugins = options?.plugins ?? [];
@@ -316,19 +326,16 @@ export class WebSocketClient<T = unknown> implements IWebSocketClient {
 }
 
 export class WindowWebSocketClient extends WebSocketClient<WebSocket> {
-  constructor(options: { url: string; logger?: WsNetworkLogger }) {
-    super(new WindowWebSocketClientAdapter(options));
-  }
-
-  connect(): Promise<void> {
-    return super.connect();
-  }
-
-  disconnect() {
-    super.disconnect();
-  }
-
-  send(message: string) {
-    super.send(message);
+  constructor(options: WindowWebSocketClientOptions) {
+    super(
+      new WindowWebSocketClientAdapter({
+        url: options.url,
+        logger: options.logger,
+      }),
+      {
+        plugins: options.plugins,
+        logger: options.logger,
+      },
+    );
   }
 }
