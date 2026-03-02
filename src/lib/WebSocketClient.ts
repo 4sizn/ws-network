@@ -10,35 +10,40 @@ export interface IWebSocketPlugin {
 }
 
 export class LoggingPlugin implements IWebSocketPlugin {
-  name = "LoggingPlugin";
+  name = 'LoggingPlugin';
+  #logger: WsNetworkLogger;
+
+  constructor(logger: WsNetworkLogger = noopLogger) {
+    this.#logger = logger;
+  }
 
   onBeforeConnect() {
-    console.log("[LoggingPlugin] 연결을 시도합니다...");
+    this.#logger.log('[LoggingPlugin] 연결을 시도합니다...');
   }
 
   onAfterConnect() {
-    console.log("[LoggingPlugin] 연결되었습니다.");
+    this.#logger.log('[LoggingPlugin] 연결되었습니다.');
   }
 
   onBeforeSend(data: string) {
-    console.log("[LoggingPlugin] 메시지 전송:", data);
+    this.#logger.log('[LoggingPlugin] 메시지 전송:', data);
     return data;
   }
 
   onAfterSend() {
-    console.log("[LoggingPlugin] 메시지가 전송되었습니다.");
+    this.#logger.log('[LoggingPlugin] 메시지가 전송되었습니다.');
   }
 
   onBeforeDisconnect() {
-    console.log("[LoggingPlugin] 연결 종료를 시도합니다...");
+    this.#logger.log('[LoggingPlugin] 연결 종료를 시도합니다...');
   }
 
   onAfterDisconnect() {
-    console.log("[LoggingPlugin] 연결이 종료되었습니다.");
+    this.#logger.log('[LoggingPlugin] 연결이 종료되었습니다.');
   }
 
   onMessage(data: string) {
-    console.log("[LoggingPlugin] 메시지 수신:", data);
+    this.#logger.log('[LoggingPlugin] 메시지 수신:', data);
   }
 }
 
@@ -155,36 +160,158 @@ export class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSock
 
 export class WebSocketClient<T = unknown> implements IWebSocketClient {
   #client: WebSocketClientAdapter<T>;
+  #plugins: IWebSocketPlugin[];
+  #logger: WsNetworkLogger;
+  #onMessageCallback: (message: string) => void;
 
-  constructor(client: WebSocketClientAdapter<T>) {
+  constructor(
+    client: WebSocketClientAdapter<T>,
+    options?: { plugins?: IWebSocketPlugin[]; logger?: WsNetworkLogger },
+  ) {
     this.#client = client;
+    this.#plugins = options?.plugins ?? [];
+    this.#logger = options?.logger ?? noopLogger;
+    this.#onMessageCallback = () => {};
+
+    this.#client.onMessage((message: string) => {
+      void this.#handleIncomingMessage(message).catch((error) => {
+        this.#logger.warn('[WebSocketClient] handleIncomingMessage failed', error);
+      });
+    });
   }
-  connect(): Promise<void> {
-    return this.#client.connect();
+  async connect(): Promise<void> {
+    await this.#runVoidHook('onBeforeConnect');
+    await this.#client.connect();
+    await this.#runVoidHook('onAfterConnect');
   }
+
   disconnect(): void {
-    this.#client.disconnect();
+    void this.disconnectAsync().catch((error) => {
+      this.#logger.warn('[WebSocketClient] disconnectAsync failed', error);
+    });
   }
+
   send(message: string): void {
-    this.#client.send(message);
+    void this.sendAsync(message).catch((error) => {
+      this.#logger.warn('[WebSocketClient] sendAsync failed', error);
+    });
   }
+
   onMessage(callback: (message: string) => void): void {
-    this.#client.onMessage(callback);
+    this.#onMessageCallback = callback;
   }
+
   onError(callback: (error: Error) => void): void {
     this.#client.onError(callback);
   }
+
   onClose(callback: () => void): void {
     this.#client.onClose(callback);
   }
+
   onConnect(callback: () => void): void {
     this.#client.onConnect(callback);
   }
+
+  addPlugin(plugin: IWebSocketPlugin): void {
+    this.#plugins = [...this.#plugins, plugin];
+  }
+
+  removePlugin(name: string): void {
+    this.#plugins = this.#plugins.filter((plugin) => plugin.name !== name);
+  }
+
+  setPlugins(plugins: IWebSocketPlugin[]): void {
+    this.#plugins = [...plugins];
+  }
+
+  async sendAsync(message: string): Promise<void> {
+    const transformedMessage = await this.#runBeforeSendHooks(message);
+    this.#client.send(transformedMessage);
+    await this.#runVoidHook('onAfterSend');
+  }
+
+  async disconnectAsync(): Promise<void> {
+    await this.#runVoidHook('onBeforeDisconnect');
+    this.#client.disconnect();
+    await this.#runVoidHook('onAfterDisconnect');
+  }
+
   get client() {
     return this.#client;
   }
+
   status(): number {
     return this.#client.networkStatus();
+  }
+
+  async #handleIncomingMessage(message: string): Promise<void> {
+    for (const plugin of this.#plugins) {
+      if (!plugin.onMessage) {
+        continue;
+      }
+
+      try {
+        await plugin.onMessage(message);
+      } catch (error) {
+        this.#logger.warn(
+          `[WebSocketClient] Plugin ${plugin.name} onMessage failed`,
+          error,
+        );
+      }
+    }
+
+    try {
+      this.#onMessageCallback(message);
+    } catch (error) {
+      this.#logger.warn('[WebSocketClient] onMessage callback threw', error);
+    }
+  }
+
+  async #runVoidHook(
+    hook:
+      | 'onBeforeConnect'
+      | 'onAfterConnect'
+      | 'onBeforeDisconnect'
+      | 'onAfterDisconnect'
+      | 'onAfterSend',
+  ): Promise<void> {
+    for (const plugin of this.#plugins) {
+      const hookHandler = plugin[hook];
+      if (!hookHandler) {
+        continue;
+      }
+
+      try {
+        await hookHandler.call(plugin);
+      } catch (error) {
+        this.#logger.warn(
+          `[WebSocketClient] Plugin ${plugin.name} ${hook} failed`,
+          error,
+        );
+      }
+    }
+  }
+
+  async #runBeforeSendHooks(message: string): Promise<string> {
+    let transformedMessage = message;
+
+    for (const plugin of this.#plugins) {
+      if (!plugin.onBeforeSend) {
+        continue;
+      }
+
+      try {
+        transformedMessage = await plugin.onBeforeSend(transformedMessage);
+      } catch (error) {
+        this.#logger.warn(
+          `[WebSocketClient] Plugin ${plugin.name} onBeforeSend failed`,
+          error,
+        );
+      }
+    }
+
+    return transformedMessage;
   }
 }
 
@@ -192,15 +319,16 @@ export class WindowWebSocketClient extends WebSocketClient<WebSocket> {
   constructor(options: { url: string; logger?: WsNetworkLogger }) {
     super(new WindowWebSocketClientAdapter(options));
   }
+
   connect(): Promise<void> {
-    return this.client.connect();
+    return super.connect();
   }
 
   disconnect() {
-    this.client.disconnect();
+    super.disconnect();
   }
 
   send(message: string) {
-    this.client.send(message);
+    super.send(message);
   }
 }
