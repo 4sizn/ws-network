@@ -1,12 +1,11 @@
 import {
-  StompWebSocketClient,
-  StompWebSocketClientAdapter,
   // StompWebSocketClient,
   // StompWebSocketClientAdapter,
   WebSocketClient,
-  // WindowWebSocketClient,
+  WindowWebSocketClient,
   // WindowWebSocketClientAdapter,
 } from "./lib/WebSocketClient";
+import { StompWebSocketClient } from './lib/protocols/stomp';
 
 // 웹소켓 채팅 페이지 구현
 
@@ -164,9 +163,26 @@ document.addEventListener("DOMContentLoaded", () => {
       // 매번 새로운 인스턴스 생성
       // client = new WindowWebSocketClient();
 
-      // client = new WebSocketClient(new WindowWebSocketClientAdapter());
-      client = new WebSocketClient(new StompWebSocketClientAdapter());
-      client.publish("login", "로그인 요청");
+      const wsUrl = import.meta.env.VITE_WS_URL as string | undefined;
+      const stompBrokerURL = import.meta.env.VITE_STOMP_BROKER_URL as
+        | string
+        | undefined;
+
+      if (stompBrokerURL) {
+        const stompClient = new StompWebSocketClient({
+          brokerURL: stompBrokerURL,
+          connectHeaders: {},
+        });
+        client = stompClient;
+        stompClient.publish('login', '로그인 요청');
+      } else {
+        if (!wsUrl) {
+          throw new Error(
+            "Missing VITE_WS_URL. Set it to use the native WebSocket adapter."
+          );
+        }
+        client = new WindowWebSocketClient({ url: wsUrl });
+      }
       // client = new StompWebSocketClient();
       // client
 
