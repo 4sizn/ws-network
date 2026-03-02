@@ -1,3 +1,5 @@
+import { Observable, Subject } from 'rxjs';
+
 export interface IWebSocketPlugin {
   name: string;
   onBeforeConnect?: () => void | Promise<void>;
@@ -54,6 +56,12 @@ export type WebSocketClientOptions = {
   logger?: WsNetworkLogger;
 };
 
+export type Unsubscribe = () => void;
+
+export type ListenerOptions = {
+  signal?: AbortSignal;
+};
+
 export type WindowWebSocketClientOptions = WebSocketClientOptions & {
   url: string;
   logger?: WsNetworkLogger;
@@ -70,10 +78,16 @@ interface IWebSocketClient {
   connect(): Promise<void>;
   disconnect(): void;
   send(message: string): void;
-  onMessage(callback: (message: string) => void): void;
-  onError(callback: (error: Error) => void): void;
-  onClose(callback: () => void): void;
-  onConnect(callback: () => void): void;
+  onMessage(
+    callback: (message: string) => void,
+    options?: ListenerOptions,
+  ): Unsubscribe;
+  onError(
+    callback: (error: Error) => void,
+    options?: ListenerOptions,
+  ): Unsubscribe;
+  onClose(callback: () => void, options?: ListenerOptions): Unsubscribe;
+  onConnect(callback: () => void, options?: ListenerOptions): Unsubscribe;
 }
 
 interface IWebSocketClientAdapter {
@@ -93,10 +107,10 @@ export abstract class WebSocketClientAdapter<T>
   public abstract connect(): Promise<void>;
   public abstract disconnect(): void;
   public abstract send(data: string): void;
-  public abstract onMessage(args: unknown): void;
-  public abstract onError(args: unknown): void;
-  public abstract onClose(args: unknown): void;
-  public abstract onConnect(args: unknown): void;
+  public abstract onMessage(callback: (data: string) => void): void;
+  public abstract onError(callback: (error: Error) => void): void;
+  public abstract onClose(callback: () => void): void;
+  public abstract onConnect(callback: () => void): void;
   public abstract networkStatus(): number;
 }
 
@@ -172,7 +186,18 @@ export class WebSocketClient<T = unknown> implements IWebSocketClient {
   #client: WebSocketClientAdapter<T>;
   #plugins: IWebSocketPlugin[];
   #logger: WsNetworkLogger;
-  #onMessageCallback: (message: string) => void;
+  #messageListeners: Set<(message: string) => void>;
+  #errorListeners: Set<(error: Error) => void>;
+  #closeListeners: Set<() => void>;
+  #connectListeners: Set<() => void>;
+  #messageSubject: Subject<string>;
+  #errorSubject: Subject<Error>;
+  #connectSubject: Subject<void>;
+  #closeSubject: Subject<void>;
+  public readonly messages$: Observable<string>;
+  public readonly errors$: Observable<Error>;
+  public readonly connected$: Observable<void>;
+  public readonly closed$: Observable<void>;
 
   constructor(
     client: WebSocketClientAdapter<T>,
@@ -181,12 +206,32 @@ export class WebSocketClient<T = unknown> implements IWebSocketClient {
     this.#client = client;
     this.#plugins = options?.plugins ?? [];
     this.#logger = options?.logger ?? noopLogger;
-    this.#onMessageCallback = () => {};
+    this.#messageListeners = new Set();
+    this.#errorListeners = new Set();
+    this.#closeListeners = new Set();
+    this.#connectListeners = new Set();
+    this.#messageSubject = new Subject<string>();
+    this.#errorSubject = new Subject<Error>();
+    this.#connectSubject = new Subject<void>();
+    this.#closeSubject = new Subject<void>();
+    this.messages$ = this.#messageSubject.asObservable();
+    this.errors$ = this.#errorSubject.asObservable();
+    this.connected$ = this.#connectSubject.asObservable();
+    this.closed$ = this.#closeSubject.asObservable();
 
     this.#client.onMessage((message: string) => {
       void this.#handleIncomingMessage(message).catch((error) => {
         this.#logger.warn('[WebSocketClient] handleIncomingMessage failed', error);
       });
+    });
+    this.#client.onError((error: Error) => {
+      this.#emitError(error);
+    });
+    this.#client.onClose(() => {
+      this.#emitClose();
+    });
+    this.#client.onConnect(() => {
+      this.#emitConnect();
     });
   }
   async connect(): Promise<void> {
@@ -207,20 +252,26 @@ export class WebSocketClient<T = unknown> implements IWebSocketClient {
     });
   }
 
-  onMessage(callback: (message: string) => void): void {
-    this.#onMessageCallback = callback;
+  onMessage(
+    callback: (message: string) => void,
+    options?: ListenerOptions,
+  ): Unsubscribe {
+    return this.#registerListener(this.#messageListeners, callback, options);
   }
 
-  onError(callback: (error: Error) => void): void {
-    this.#client.onError(callback);
+  onError(
+    callback: (error: Error) => void,
+    options?: ListenerOptions,
+  ): Unsubscribe {
+    return this.#registerListener(this.#errorListeners, callback, options);
   }
 
-  onClose(callback: () => void): void {
-    this.#client.onClose(callback);
+  onClose(callback: () => void, options?: ListenerOptions): Unsubscribe {
+    return this.#registerListener(this.#closeListeners, callback, options);
   }
 
-  onConnect(callback: () => void): void {
-    this.#client.onConnect(callback);
+  onConnect(callback: () => void, options?: ListenerOptions): Unsubscribe {
+    return this.#registerListener(this.#connectListeners, callback, options);
   }
 
   addPlugin(plugin: IWebSocketPlugin): void {
@@ -272,10 +323,87 @@ export class WebSocketClient<T = unknown> implements IWebSocketClient {
     }
 
     try {
-      this.#onMessageCallback(message);
+      this.#emitMessage(message);
     } catch (error) {
-      this.#logger.warn('[WebSocketClient] onMessage callback threw', error);
+      this.#logger.warn('[WebSocketClient] onMessage listeners failed', error);
     }
+  }
+
+  #registerListener<T>(
+    listeners: Set<(value: T) => void>,
+    callback: (value: T) => void,
+    options?: ListenerOptions,
+  ): Unsubscribe {
+    listeners.add(callback);
+
+    let isUnsubscribed = false;
+    const unsubscribe = () => {
+      if (isUnsubscribed) {
+        return;
+      }
+
+      isUnsubscribed = true;
+      listeners.delete(callback);
+      options?.signal?.removeEventListener('abort', unsubscribe);
+    };
+
+    if (options?.signal) {
+      if (options.signal.aborted) {
+        unsubscribe();
+      } else {
+        options.signal.addEventListener('abort', unsubscribe, { once: true });
+      }
+    }
+
+    return unsubscribe;
+  }
+
+  #emitMessage(message: string): void {
+    for (const listener of this.#messageListeners) {
+      try {
+        listener(message);
+      } catch (error) {
+        this.#logger.warn('[WebSocketClient] onMessage listener threw', error);
+      }
+    }
+
+    this.#messageSubject.next(message);
+  }
+
+  #emitError(error: Error): void {
+    for (const listener of this.#errorListeners) {
+      try {
+        listener(error);
+      } catch (listenerError) {
+        this.#logger.warn('[WebSocketClient] onError listener threw', listenerError);
+      }
+    }
+
+    this.#errorSubject.next(error);
+  }
+
+  #emitClose(): void {
+    for (const listener of this.#closeListeners) {
+      try {
+        listener();
+      } catch (error) {
+        this.#logger.warn('[WebSocketClient] onClose listener threw', error);
+      }
+    }
+
+    this.#closeSubject.next();
+  }
+
+  #emitConnect(): void {
+    for (const listener of this.#connectListeners) {
+      try {
+        listener();
+      } catch (error) {
+        this.#logger.warn('[WebSocketClient] onConnect listener threw', error);
+      }
+    }
+
+    this.#connectSubject.next();
   }
 
   async #runVoidHook(
