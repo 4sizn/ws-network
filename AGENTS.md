@@ -1,27 +1,36 @@
-# PROJECT KNOWLEDGE BASE
+# ws-network
 
-**Generated:** 2026-02-27
-**Commit:** (unborn)
-**Branch:** master
+A browser WebSocket client library with an adapter-based design. Native
+WebSocket is the primary target; other protocols are opt-in and isolated.
 
-## OVERVIEW
-This repo is a local bundle of LLM/agent skills (mostly Markdown + a few scripts). The canonical source lives under `.agents/skills/`; `.agent/skills/`, `.claude/skills/`, and `.cline/skills/` mirror it via symlinks.
+This repo also carries a bundle of agent skills. They are tooling, not the
+product — see "AGENT SKILLS BUNDLE" near the end. If you are here to change
+the library, everything you need is above that section.
 
-## STRUCTURE
+## LIBRARY LAYOUT
+
 ```
-./
-├── .agents/skills/               # canonical skill content
-├── .agent/skills/                # symlink mirror -> .agents/skills
-├── .claude/skills/               # symlink mirror -> .agents/skills
-├── .cline/skills/                # symlink mirror -> .agents/skills
-├── .opencode/                    # local OpenCode plugin deps (has node_modules/)
-├── opencode.json                 # OpenCode model/provider config
-└── skills-lock.json              # pinned skills sources + hashes
+src/
+├── lib/WebSocketClient.ts        # core: client, adapter contract, plugins, RxJS streams
+├── lib/utils.ts                  # tiny shared helpers
+├── lib/protocols/<name>/         # one opt-in protocol per directory
+├── lib/workers/                  # worker entrypoints (native WebSocket only today)
+├── lib/adapters/                 # reserved; currently a placeholder
+└── main.ts                       # demo app, not part of the library
+server/                           # Node WebSocket echo server for the demo
 ```
+
+Read `src/lib/WebSocketClient.ts` first. `WebSocketClient` owns the plugin
+pipeline and the listener/stream registry; `WebSocketClientAdapter` is the seam
+where a transport or protocol plugs in. Every protocol subclasses that adapter.
 
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
+| Understand the core contract | `src/lib/WebSocketClient.ts` | Client, adapter, plugin hook order, RxJS streams.
+| Add or change a protocol | `src/lib/protocols/<name>/` | Adapter + facade + barrel. Opt-in, never imported by the core.
+| Worker entrypoints | `src/lib/workers/` | Typed `postMessage` envelopes only.
+| Run the demo | `README.md` "Demo" | Needs `server/` and `VITE_WS_URL`.
 | Find available skills | `.agents/skills/` | Each subdir is one skill.
 | Learn a skill's trigger + instructions | `.agents/skills/<skill>/SKILL.md` | YAML frontmatter name/description + body.
 | React/Next perf guidelines (compiled) | `.agents/skills/vercel-react-best-practices/AGENTS.md` | Large generated doc; use as reference.
@@ -30,16 +39,24 @@ This repo is a local bundle of LLM/agent skills (mostly Markdown + a few scripts
 | Change model/provider | `opencode.json` | `model`, `small_model`, enabled providers.
 | See pinned upstream sources | `skills-lock.json` | Maps skill -> GitHub repo + computed hash.
 
-## CONVENTIONS
-- Canonical edits go in `.agents/skills/` (other tool-specific directories are symlink mirrors).
-- Skill layout is `SKILL.md` plus optional `rules/`, `scripts/`, `references/`, `assets/`.
-- OpenCode `task` calls must use `run_in_background` (boolean). Do not use `run_background`.
-- Default execution mode for independent agent tasks is parallel background: launch multiple `task(...)` calls with `run_in_background: true`.
-- Only use `run_in_background: false` when downstream steps require immediate, sequential task output.
+## ANTI-PATTERNS (LIBRARY)
 
-## ANTI-PATTERNS (THIS PROJECT)
-- Do not edit `.agent/skills/`, `.claude/skills/`, `.cline/skills/` directly; they are symlink mirrors.
-- Do not edit `.opencode/node_modules/` (generated vendored deps).
+- Do not import a protocol into `src/lib/WebSocketClient.ts`. It stays
+  native-WebSocket-only.
+- Do not put test doubles in non-`.test.ts` files. Declare them inside the test
+  file, the way `FakeAdapter` is declared in `src/lib/WebSocketClient.test.ts`.
+- Do not invent naming suffixes. Grep the neighbouring declarations first.
+  The patterns actually in the tree, with their sample counts:
+  - client/adapter/plugin contracts take an `I` prefix — `IWebSocketPlugin`,
+    `IWebSocketClient`, `IWebSocketClientAdapter` (3)
+  - a capability interface takes an `-Able` suffix and **no** `I` —
+    `PubSubAble` (1)
+  - options take a `<Class>Options` name — `StompWebSocketClientAdapterOptions`
+  - a boolean helper takes an `is` prefix — `isString` (1)
+  - a function-shaped alias is a plain noun, no `Fn` — `Unsubscribe` (1)
+
+  Where the sample is one declaration, say so when proposing a name rather than
+  presenting it as an established rule.
 
 ## WS-NETWORK CODE RULES
 
@@ -52,6 +69,50 @@ This repo is a local bundle of LLM/agent skills (mostly Markdown + a few scripts
 - Worker protocol should be typed and consistent; do not mix raw and typed `postMessage` payloads.
 
 ## COMMANDS
+
+```bash
+npm ci                    # install exactly what the lockfile pins
+npm test                  # unit tests (vitest)
+npm run lint              # biome lint (does not check formatting)
+npm run format            # biome format --write
+npm run build             # tsc + vite build
+npm run dev               # demo app
+```
+
+CI runs install, lint, unit tests, integration tests when the script exists,
+and build, plus a separate job that builds `server/`:
+`.github/workflows/ci.yml`.
+
+**CI does not gate formatting yet, on purpose.** `npm run lint` is
+`biome lint`, which ignores formatting, and `biome check .` currently reports
+42 errors (`opencode.json`, `src/lib/utils.ts`, `src/main.ts`). Adding the gate
+means reformatting those files first, and `src/main.ts` is being edited by an
+open PR. Add the gate — `npm run check` or a check-only `biome` step — right
+after that PR merges, in a commit that does the reformat at the same time.
+
+## AGENT SKILLS BUNDLE
+
+The rest of this file describes the agent skills carried in this repo. They do
+not ship with the library. `.agents/skills/` is the canonical source;
+`.agent/skills/`, `.claude/skills/` and `.cline/skills/` are symlink mirrors of
+it. `opencode.json` selects the model/provider and `skills-lock.json` pins the
+upstream sources.
+
+### Conventions
+
+- Canonical edits go in `.agents/skills/` (other tool-specific directories are symlink mirrors).
+- Skill layout is `SKILL.md` plus optional `rules/`, `scripts/`, `references/`, `assets/`.
+- OpenCode `task` calls must use `run_in_background` (boolean). Do not use `run_background`.
+- Default execution mode for independent agent tasks is parallel background: launch multiple `task(...)` calls with `run_in_background: true`.
+- Only use `run_in_background: false` when downstream steps require immediate, sequential task output.
+
+### Anti-patterns
+
+- Do not edit `.agent/skills/`, `.claude/skills/`, `.cline/skills/` directly; they are symlink mirrors.
+- Do not edit `.opencode/node_modules/` (generated vendored deps).
+
+### Commands
+
 ```bash
 # quick inventory
 ls -la .agents/skills
