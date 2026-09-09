@@ -142,6 +142,10 @@ export class StompWebSocketClientAdapter
   }
 
   #activate(): Promise<void> {
+    // 이전 인스턴스가 남아 있으면 여기서 정리한다. 이게 없으면 어느 경로로든
+    // 재활성화될 때 고아가 다시 생긴다.
+    this.client?.deactivate();
+
     return new Promise((resolve) => {
       this.client = new StompClient({
         brokerURL: this.#brokerURL,
@@ -170,6 +174,12 @@ export class StompWebSocketClientAdapter
         );
       };
       this.client.onWebSocketClose = () => {
+        // stompjs 는 소켓이 끊기면 active 상태에서 재연결을 예약한다. 단
+        // reconnectDelay 가 0 이면 예약이 없는데도 상태는 active 로 남는다.
+        // 그 경우 약속을 버려야 다음 connect() 가 실제로 다시 붙는다.
+        if (!this.client?.active || this.#reconnectDelay === 0) {
+          this.#connectPromise = undefined;
+        }
         this.onCloseCallback?.();
       };
       this.client.onDisconnect = () => {
