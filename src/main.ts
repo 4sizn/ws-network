@@ -183,10 +183,13 @@ document.addEventListener("DOMContentLoaded", () => {
         // `mqtt` 는 이 저장소의 런타임 의존성이 아니다. 어댑터까지 동적
         // import 로 분리해, MQTT 를 쓰지 않으면 메인 번들에 한 바이트도 들어가지
         // 않게 한다 (opt-in).
-        const [{ MqttWebSocketClient }, { connect }] = await Promise.all([
+        const [{ MqttWebSocketClient }, mqttModule] = await Promise.all([
           import('./lib/protocols/mqtt'),
           import('mqtt'),
         ]);
+        // 브라우저 ESM 빌드는 default export 만 내보낸다. 명명 임포트로
+        // `connect` 를 꺼내면 브라우저에서 undefined 가 된다.
+        const connect = mqttModule.default.connect;
         const mqttClient = new MqttWebSocketClient({
           brokerURL: mqttBrokerURL,
           connect,

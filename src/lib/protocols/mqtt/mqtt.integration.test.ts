@@ -1,7 +1,9 @@
 import net, { type AddressInfo } from 'node:net';
 
 import { Aedes } from 'aedes';
-import { connect } from 'mqtt';
+import mqtt from 'mqtt';
+
+const { connect } = mqtt;
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { MqttWebSocketClient } from './MqttWebSocketClient';

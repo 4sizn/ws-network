@@ -1,4 +1,4 @@
-import { connect } from 'mqtt';
+import mqtt from 'mqtt';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -366,7 +366,9 @@ describe('injected mqtt module contract', () => {
   it('accepts the real mqtt@5.14.0 connect function', () => {
     // AC3: 컴파일 타임 검증이 핵심이다. tsconfig 의 include 가 테스트 파일을
     // 포함하므로 `npm run build` 가 이 대입을 실제로 검사한다.
-    const injected: MqttConnect<Parameters<typeof connect>[1]> = connect;
+    // 브라우저 빌드가 default export 만 내보내므로 그 모양으로 검증한다.
+    const injected: MqttConnect<Parameters<typeof mqtt.connect>[1]> =
+      mqtt.connect;
 
     expect(typeof injected).toBe('function');
   });
@@ -629,5 +631,174 @@ describe('MqttWebSocketClient', () => {
       expect(injected.endCalls).toBe(1);
     });
     expect(client.status()).toBe(WebSocket.CLOSED);
+  });
+});
+
+describe('두 가지 사용 방안', () => {
+  it('조립: WebSocketClient + MqttWebSocketClientAdapter (권장)', async () => {
+    const injected = new FakeClient();
+    const timeline: string[] = [];
+    const plugin: IWebSocketPlugin = {
+      name: 'timeline',
+      onBeforeConnect: () => {
+        timeline.push('before');
+      },
+      onAfterConnect: () => {
+        timeline.push('after');
+      },
+    };
+
+    // 어댑터를 만들어 기반 클라이언트에 넣는다.
+    const adapter = new MqttWebSocketClientAdapter({
+      brokerURL: 'wss://broker.test:8884/mqtt',
+      connect: () => injected,
+    });
+    const client = new WebSocketClient(adapter, { plugins: [plugin] });
+
+    const streamed: string[] = [];
+    const subscription = client.messages$.subscribe((message) => {
+      streamed.push(message);
+    });
+
+    const received: { message: string; topic: string }[] = [];
+    // 생명주기·스트림은 client, 발행·구독은 adapter.
+    adapter.subscribe('sensor/+/temp', (message, topic) => {
+      received.push({ message, topic });
+    });
+
+    const connecting = client.connect();
+    await vi.waitFor(() => {
+      expect(injected.listenerCounts.connect).toBe(1);
+    });
+    injected.emitConnect();
+    await connecting;
+
+    // 플러그인 훅이 조립 경로에서도 그대로 돈다.
+    expect(timeline).toEqual(['before', 'after']);
+    expect(injected.subscribed).toEqual(['sensor/+/temp']);
+
+    adapter.publish('sensor/a/temp', '21.5', { qos: 1 });
+    expect(injected.published).toEqual([
+      { topic: 'sensor/a/temp', message: '21.5', options: { qos: 1 } },
+    ]);
+
+    injected.emitMessage('sensor/a/temp', encodePayload('21.5'));
+
+    expect(received).toEqual([{ message: '21.5', topic: 'sensor/a/temp' }]);
+    await vi.waitFor(() => expect(streamed).toEqual(['21.5']));
+    expect(client.status()).toBe(WebSocket.OPEN);
+
+    subscription.unsubscribe();
+  });
+
+  it('편의 클래스와 조립이 같은 결과를 낸다', async () => {
+    async function runComposed() {
+      const injected = new FakeClient();
+      const adapter = new MqttWebSocketClientAdapter({
+        brokerURL: 'wss://broker.test:8884/mqtt',
+        connect: () => injected,
+      });
+      const client = new WebSocketClient(adapter);
+      const got: string[] = [];
+      adapter.subscribe('a/+', (message) => got.push(message));
+
+      const connecting = client.connect();
+      await vi.waitFor(() => expect(injected.listenerCounts.connect).toBe(1));
+      injected.emitConnect();
+      await connecting;
+
+      adapter.publish('a/1', 'x');
+      injected.emitMessage('a/1', encodePayload('x'));
+      return { got, injected, status: client.status() };
+    }
+
+    async function runFacade() {
+      const injected = new FakeClient();
+      const client = new MqttWebSocketClient({
+        brokerURL: 'wss://broker.test:8884/mqtt',
+        connect: () => injected,
+      });
+      const got: string[] = [];
+      client.subscribe('a/+', (message) => got.push(message));
+
+      const connecting = client.connect();
+      await vi.waitFor(() => expect(injected.listenerCounts.connect).toBe(1));
+      injected.emitConnect();
+      await connecting;
+
+      client.publish('a/1', 'x');
+      injected.emitMessage('a/1', encodePayload('x'));
+      return { got, injected, status: client.status() };
+    }
+
+    const composed = await runComposed();
+    const facade = await runFacade();
+
+    expect(composed.got).toEqual(facade.got);
+    expect(composed.injected.subscribed).toEqual(facade.injected.subscribed);
+    expect(composed.injected.published).toEqual(facade.injected.published);
+    expect(composed.status).toBe(facade.status);
+  });
+});
+
+describe('disconnect 후 재연결', () => {
+  it('builds a fresh client on reconnect instead of reusing an ended one', async () => {
+    const clients: FakeClient[] = [];
+    const connect = vi.fn(() => {
+      const client = new FakeClient();
+      clients.push(client);
+      return client;
+    });
+    const adapter = new MqttWebSocketClientAdapter({
+      brokerURL: 'wss://broker.test:8884/mqtt',
+      connect,
+    });
+
+    const first = adapter.connect();
+    clients[0].emitConnect();
+    await first;
+
+    adapter.disconnect();
+    expect(clients[0].endCalls).toBe(1);
+
+    // `end()` 한 클라이언트를 재사용하면 여기서 연결이 되지 않는다.
+    const second = adapter.connect();
+    expect(connect).toHaveBeenCalledTimes(2);
+    clients[1].emitConnect();
+    await second;
+
+    expect(adapter.networkStatus()).toBe(WebSocket.OPEN);
+  });
+
+  it('re-registers subscriptions after a reconnect', async () => {
+    const clients: FakeClient[] = [];
+    const connect = vi.fn(() => {
+      const client = new FakeClient();
+      clients.push(client);
+      return client;
+    });
+    const adapter = new MqttWebSocketClientAdapter({
+      brokerURL: 'wss://broker.test:8884/mqtt',
+      connect,
+    });
+
+    const received: string[] = [];
+    const first = adapter.connect();
+    clients[0].emitConnect();
+    await first;
+    adapter.subscribe('sensor/a', (message) => received.push(message));
+    expect(clients[0].subscribed).toEqual(['sensor/a']);
+
+    adapter.disconnect();
+
+    const second = adapter.connect();
+    clients[1].emitConnect();
+    await second;
+
+    // 연결이 새로 서면 기존 구독이 새 클라이언트에 다시 등록된다.
+    expect(clients[1].subscribed).toEqual(['sensor/a']);
+
+    clients[1].emitMessage('sensor/a', encodePayload('after reconnect'));
+    expect(received).toEqual(['after reconnect']);
   });
 });

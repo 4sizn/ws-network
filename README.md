@@ -2,6 +2,38 @@
 
 Native browser WebSocket client with an adapter-based design.
 
+Start here if you are new to the codebase: [`docs/architecture.md`](docs/architecture.md)
+has the class UML and dependency map.
+
+## Two ways to build a client
+
+Every protocol ships both. Pick per call site, not per project.
+
+| | Shape | When |
+|---|---|---|
+| **Composition — recommended** | `new WebSocketClient(new XAdapter({...}), { plugins, logger })` | Default. Plugins and logger are visible at the call site, the adapter is swappable, and tests inject a fake adapter directly. |
+| Convenience class | `new XClient({...})` | Shorter when you want one object and no plugins. |
+
+The composition form is the same for every protocol, which is the point: the
+adapter is the only part that changes.
+
+```ts
+// native
+const client = new WebSocketClient(
+  new WindowWebSocketClientAdapter({ url }),
+  { plugins: [new LoggingPlugin(console)], logger: console },
+);
+
+// MQTT, direct
+const adapter = new MqttWebSocketClientAdapter({ brokerURL, connect: mqtt.connect });
+const client = new WebSocketClient(adapter, { plugins: [...] });
+```
+
+One trade-off, stated plainly: for a pub/sub protocol the composition form
+splits the surface across two objects — lifecycle and streams on `client`,
+`publish`/`subscribe` on `adapter`. The convenience class keeps both on one
+object. That is the only reason to prefer it.
+
 Notes:
 - This repo is currently `private: true` (see `package.json`), so examples below are repo-local.
 - STOMP support is opt-in and isolated under `src/lib/protocols/stomp/`.
@@ -124,26 +156,58 @@ connectionSubscription.unsubscribe();
 This repo never imports `mqtt`. You pass `mqtt.connect` in, so you pin the
 version and MQTT code stays out of bundles that do not use it.
 
+### Composition (recommended)
+
 ```ts
-import { connect } from 'mqtt'; // you own this dependency
+import mqtt from 'mqtt'; // you own this dependency
+import { LoggingPlugin, WebSocketClient } from './src/lib/WebSocketClient';
+import { MqttWebSocketClientAdapter } from './src/lib/protocols/mqtt';
+
+const adapter = new MqttWebSocketClientAdapter({
+  brokerURL: 'wss://broker.example.com:8884/mqtt',
+  connect: mqtt.connect,
+  connectOptions: { clientId: 'web-1', clean: true },
+});
+
+const client = new WebSocketClient(adapter, {
+  plugins: [new LoggingPlugin(console)],
+  logger: console,
+});
+
+// lifecycle, plugin hooks and RxJS streams come from the client
+await client.connect();
+client.messages$.subscribe((message) => console.log(message));
+
+// publish and subscribe come from the adapter
+adapter.subscribe('sensor/+/temp', (message, topic) => {
+  console.log(topic, message);
+});
+adapter.publish('sensor/a/temp', '21.5', { qos: 1, retain: true });
+```
+
+### Convenience class
+
+```ts
+import mqtt from 'mqtt';
 import { MqttWebSocketClient } from './src/lib/protocols/mqtt';
 
 const client = new MqttWebSocketClient({
   brokerURL: 'wss://broker.example.com:8884/mqtt',
-  connect,
+  connect: mqtt.connect,
   connectOptions: { clientId: 'web-1', clean: true },
 });
 
-// The callback receives the receiving topic as a second argument, so a
-// wildcard subscriber can tell messages apart.
 client.subscribe('sensor/+/temp', (message, topic) => {
   console.log(topic, message);
 });
-
 client.publish('sensor/a/temp', '21.5', { qos: 1, retain: true });
 
 await client.connect();
 ```
+
+Both paths are pinned by tests in
+`src/lib/protocols/mqtt/MqttWebSocketClient.test.ts` ("두 가지 사용 방안"),
+including one that asserts the two produce the same result.
 
 Behavior worth knowing:
 
@@ -234,6 +298,9 @@ Worker entrypoints:
 - Dedicated worker: `src/lib/workers/socket-workers.ts`
 - Shared worker: `src/lib/workers/shared-socket-workers.ts`
 
+Both wrap the native `WindowWebSocketClient`. A worker path for MQTT is **not
+implemented yet** — see the note at the end of this section.
+
 Typed outbound envelope (worker -> main thread):
 - `{ type: 'CONNECTED' }`
 - `{ type: 'MESSAGE', data: string }`
@@ -247,3 +314,25 @@ Inbound (main thread -> worker) supports:
 
 URL injection for workers:
 - Pass `?wsUrl=...` in the worker URL, or set `VITE_WS_URL`.
+
+### MQTT over a worker: not implemented
+
+Running MQTT inside a SharedWorker so several tabs share one broker connection
+was explored and rolled back. What was learned, so the next attempt does not
+start from zero:
+
+- MQTT is a per-connection state machine. Sharing one socket while each tab
+  keeps its own mqtt client does **not** work: the broker drops the connection
+  on the second CONNECT. The session has to live in the worker.
+- One worker file can serve both a dedicated worker and a SharedWorker: a
+  dedicated worker's own global already satisfies the port surface
+  (`postMessage`/`onmessage`/`onmessageerror`), so only the entry hook differs.
+- The worker path does not need new client classes. Wrapping the port as an
+  `IMqttClient` lets `MqttWebSocketClient` and `MqttWebSocketClientAdapter` be
+  reused with only the injected `connect` swapped.
+- Do not bundle such a worker with vite: every dynamic `import()` makes vite
+  emit a `__vitePreload` helper that touches `document`, which a worker does not
+  have. esbuild splits chunks without that helper.
+- The open question that stopped it: the injection seam should read like the
+  STOMP adapter (`(options, injected)` with flat protocol options) rather than
+  putting a `connect` factory inside the options object.

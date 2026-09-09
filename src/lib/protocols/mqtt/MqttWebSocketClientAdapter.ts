@@ -162,8 +162,21 @@ export class MqttWebSocketClientAdapter<TOptions = unknown>
     return this.#connecting;
   }
 
+  /**
+   * `end()` 한 클라이언트는 다시 못 쓴다. 상태를 초기화해 다음 `connect()` 가
+   * 주입된 팩토리로 새 클라이언트를 만들게 한다. 초기화하지 않으면
+   * `#connecting` 이 이미 resolve 된 Promise 를 그대로 돌려주어 재연결이
+   * 조용히 실패한다.
+   */
   public disconnect(): void {
     this.client?.end();
+    this.client = undefined;
+    this.#connecting = undefined;
+    this.#settled = false;
+
+    for (const subscription of Object.values(this.subscriptions)) {
+      subscription.registered = false;
+    }
   }
 
   public subscribe(

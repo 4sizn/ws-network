@@ -23,6 +23,7 @@ This repo is a local bundle of LLM/agent skills (mostly Markdown + a few scripts
 | Task | Location | Notes |
 |------|----------|-------|
 | Find available skills | `.agents/skills/` | Each subdir is one skill.
+| Understand the code layout and dependencies | `docs/architecture.md` | Mermaid class UML per layer plus the injection seam.
 | Take work from idea to merge | `.agents/skills/ai-native-sdlc/SKILL.md` | Stage loop + `intent.md`/`spec.md`/`plan.md` templates.
 | Learn a skill's trigger + instructions | `.agents/skills/<skill>/SKILL.md` | YAML frontmatter name/description + body.
 | React/Next perf guidelines (compiled) | `.agents/skills/vercel-react-best-practices/AGENTS.md` | Large generated doc; use as reference.
@@ -50,11 +51,15 @@ This repo is a local bundle of LLM/agent skills (mostly Markdown + a few scripts
 - Preserve the adapter-based design in `src/lib/WebSocketClient.ts` and keep worker entrypoints under `src/lib/workers/`.
 - Native WebSocket is the primary target; keep `src/lib/WebSocketClient.ts` native-only.
 - Keep STOMP isolated under `src/lib/protocols/stomp/` (opt-in). Do not reintroduce STOMP imports into the native module.
-- Tests come in three tiers: `npm test` (unit, fake, offline), `npm run
-  test:integration` (in-process aedes broker over TCP, real `mqtt` client),
-  and a manual browser tier via `VITE_MQTT_BROKER_URL`. Configs are
-  `vitest.config.ts` and `vitest.integration.config.ts`; the unit tier excludes
-  `*.integration.test.ts`.
+- Tests come in two tiers: `npm test` (unit, fakes, offline) and
+  `npm run test:integration` (in-process aedes broker over TCP, real `mqtt`
+  client). Configs are `vitest.config.ts` and `vitest.integration.config.ts`;
+  the unit tier excludes `*.integration.test.ts`.
+- An MQTT worker path was explored and rolled back. `README.md` "MQTT over a
+  worker: not implemented" records what was learned; read it before retrying.
+- A working MQTT-over-WebSocket test broker is `test/mqttBroker.ts`: aedes on TCP
+  with a ws -> TCP proxy in front. Use it instead of trying `aedes-server-factory`
+  with `ws: true`.
 - The integration broker runs over TCP, not WebSocket. `aedes` served over ws
   via `aedes-server-factory` does not complete the handshake with a real `mqtt`
   client: the ws server never selects the required `mqtt` subprotocol, and the
