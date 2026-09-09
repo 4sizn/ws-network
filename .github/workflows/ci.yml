@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 같은 브랜치에 새 푸시가 오면 진행 중인 실행을 취소한다.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# 읽기만 필요하다. 기본값보다 좁게 잡는다.
+permissions:
+  contents: read
+
+jobs:
+  library:
+    name: library
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # .nvmrc 가 Node 버전의 단일 진실원천이다. 매트릭스를 두지 않는
+          # 이유도 그것이다 — 저장소가 한 버전을 고정한다.
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      # 인프로세스 브로커를 쓰는 통합 티어. 이 스크립트가 없는 브랜치에서도
+      # CI 가 돌아야 하므로 존재 여부를 보고 실행한다. 조용히 건너뛰지 않고
+      # 어느 쪽이든 로그에 남긴다 — 스크립트 이름이 바뀌면 눈에 보인다.
+      - name: Integration tests
+        run: |
+          if npm run --silent 2>&1 | grep -qE '^\s+test:integration$'; then
+            echo "test:integration found — running"
+            npm run test:integration
+          else
+            echo "::notice::no test:integration script on this branch, skipping"
+          fi
+
+      - name: Build
+        run: npm run build
+
+  demo-server:
+    name: demo server
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      # `server/` 는 자기 package.json 과 TypeScript 5.3 을 갖는다. 루트
+      # tsconfig 의 `include` 가 `src` 뿐이라 루트 빌드가 이걸 타입체크하지
+      # 않는다. README 의 데모가 이 서버를 전제하므로 따로 검증한다.
+      - name: Install
+        run: npm ci
+        working-directory: server
+
+      - name: Build
+        run: npm run build
+        working-directory: server
