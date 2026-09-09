@@ -376,9 +376,7 @@ function defineStompContract(getTarget: () => StompTarget) {
     expect(withoutProbes(fromStream)).toEqual(['코어까지']);
   });
 
-  // 알려진 결함. `_unsubscribe` 가 `subscriptions` 레코드에서만 지우고 STOMP
-  // `unsubscribe()` 를 호출하지 않아 브로커가 계속 보낸다. 위와 같은 규칙.
-  it.fails('stops receiving broker messages after unsubscribe', async () => {
+  it('stops receiving broker messages after unsubscribe', async () => {
     const client = createClient();
     const topic = uniqueTopic('chat');
 
