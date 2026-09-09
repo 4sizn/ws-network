@@ -52,6 +52,15 @@ jobs:
             echo "::notice::no test:integration script on this branch, skipping"
           fi
 
+      # 실제 브로커 티어. 인프로세스 브로커는 내가 쓴 프레임 구현이라
+      # 상호운용을 증명하지 못한다. 같은 계약 테스트를 RabbitMQ Web-STOMP 에
+      # 다시 돌려서 그걸 메운다. ubuntu-latest 러너에는 docker compose 가 있다.
+      - name: Start STOMP broker
+        run: npm run stomp:up
+
+      - name: Real broker integration tests
+        run: npm run test:integration:broker
+
       - name: Build
         run: npm run build
 

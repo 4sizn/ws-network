@@ -6,17 +6,24 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "test": "vitest run",
+    "test": "vitest run --project unit",
     "preview": "vite preview",
     "format": "biome format --write .",
     "lint": "biome lint .",
-    "check": "biome check --apply ."
+    "check": "biome check --apply .",
+    "test:integration": "vitest run --project integration",
+    "stomp:up": "docker compose -f docker-compose.test.yml up -d --wait",
+    "stomp:down": "docker compose -f docker-compose.test.yml down -v",
+    "test:integration:broker": "WS_NETWORK_STOMP_URL=ws://127.0.0.1:15674/ws vitest run --project integration"
   },
   "devDependencies": {
     "@biomejs/biome": "1.5.3",
-    "typescript": "^4.6.4",
+    "@types/node": "^26.5.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.3",
     "vite": "^3.0.7",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "ws": "^8.21.3"
   },
   "dependencies": {
     "@stomp/stompjs": "^7.1.1",

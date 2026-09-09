@@ -6,6 +6,66 @@ Notes:
 - This repo is currently `private: true` (see `package.json`), so examples below are repo-local.
 - STOMP support is opt-in and isolated under `src/lib/protocols/stomp/`.
 
+## Tests
+
+Two tiers, split by `vitest.config.ts` projects:
+
+```bash
+npm test                  # unit tier: no sockets, src/**/*.test.ts
+npm run test:integration  # integration tier: src/**/*.integration.test.ts
+```
+
+The integration tier starts a real server in-process on an ephemeral port
+(`ws` on the server side, the platform `WebSocket` on the client side) and
+drives the public client API against it:
+
+- `src/lib/WebSocketClient.integration.test.ts` — `WindowWebSocketClient`
+  against an echo server: connect, `status()`, listeners and `messages$`,
+  plugin hook order with a transformed payload, close from either side, and
+  the error path on a refused port.
+- `src/lib/protocols/stomp/StompWebSocketClient.integration.test.ts` —
+  `StompWebSocketClient` against a minimal STOMP 1.2 broker: the CONNECT
+  handshake with `connectHeaders`, subscribe/publish round-trip, array topics,
+  close, and plugin hooks through the adapter composed with `WebSocketClient`.
+
+Each server is declared inside the test file that uses it; they are real
+servers, not test doubles.
+
+Three STOMP contract tests are `it.fails` because the behaviour is known to be
+broken: inbound messages never reach the core `onMessage`/`messages$` (the
+adapter calls subscription callbacks directly and never its own
+`onMessageCallback`), `unsubscribe()` does not stop broker delivery, and
+`status()` throws because the adapter's `networkStatus()` is not implemented.
+When one is fixed its test turns red — change `it.fails` to `it` at that point.
+
+### Real broker tier (docker)
+
+The in-process STOMP broker is written in this repo, so it cannot prove
+interoperability — a shared misreading of the spec would pass. The STOMP tests
+are therefore a contract (`defineStompContract`) that runs twice: against the
+in-process broker always, and against RabbitMQ Web-STOMP when
+`WS_NETWORK_STOMP_URL` is set. Without that variable the real-broker block is
+skipped, so the tier still runs on machines without docker.
+
+Any Docker-compatible runtime works; this repo was verified with colima:
+
+```bash
+brew install colima docker docker-compose   # once
+colima start                                # once per boot
+```
+
+```bash
+npm run stomp:up                  # RabbitMQ Web-STOMP on ws://127.0.0.1:15674/ws
+npm run test:integration:broker   # same contract against the real broker
+npm run stomp:down
+```
+
+`docker-compose.test.yml` enables the `rabbitmq_web_stomp` plugin and creates a
+`test`/`test` account, because RabbitMQ's `guest` account is rejected from
+outside the container. To point the contract at a different broker, set
+`WS_NETWORK_STOMP_URL` to it; the credentials are `test`/`test` in the test
+file.
+
 ## Demo
 
 1) Start the Node WebSocket echo server:
@@ -21,6 +81,23 @@ npm run dev
 ```bash
 VITE_WS_URL=ws://127.0.0.1:8010 npm run dev
 ```
+
+### STOMP demo
+
+The demo app's STOMP path takes `VITE_STOMP_BROKER_URL`, and the broker from
+"Real broker tier" below serves it:
+
+```bash
+npm run stomp:up
+VITE_STOMP_BROKER_URL=ws://127.0.0.1:15674/ws npm run dev
+```
+
+`VITE_STOMP_BROKER_URL` takes precedence over `VITE_WS_URL` in the demo app.
+
+That path is not wired up yet: it publishes to `login` before `connect()`
+resolves (a no-op, the STOMP client does not exist yet), and the message form
+calls `send()`, which the STOMP adapter throws on. Verify STOMP through
+`npm run test:integration` until the demo is wired.
 
 ## Native WebSocket Usage
 
