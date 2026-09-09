@@ -31,12 +31,11 @@ drives the public client API against it:
 Each server is declared inside the test file that uses it; they are real
 servers, not test doubles.
 
-Three STOMP contract tests are `it.fails` because the behaviour is known to be
-broken: inbound messages never reach the core `onMessage`/`messages$` (the
-adapter calls subscription callbacks directly and never its own
-`onMessageCallback`), `unsubscribe()` does not stop broker delivery, and
-`status()` throws because the adapter's `networkStatus()` is not implemented.
-When one is fixed its test turns red — change `it.fails` to `it` at that point.
+No STOMP contract test is `it.fails` any more: the three defects they pinned
+(inbound messages not reaching the core `onMessage`/`messages$`, `unsubscribe()`
+not stopping broker delivery, `status()` throwing) are fixed. `status()` on a
+STOMP client reports the underlying socket state, the same meaning it has on the
+native client — not the STOMP session state, which `onConnect`/`onClose` track.
 
 ### Real broker tier (docker)
 

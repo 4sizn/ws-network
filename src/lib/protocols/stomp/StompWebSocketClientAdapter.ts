@@ -196,7 +196,10 @@ export class StompWebSocketClientAdapter
     this.onErrorCallback = callback;
   }
 
+  // WindowWebSocketClientAdapter 와 같은 의미를 돌려준다: STOMP 세션 상태가
+  // 아니라 소켓 상태다. 소켓이 열렸어도 STOMP CONNECTED 전이면 OPEN 이다.
+  // 세션 상태가 필요하면 onConnect/onClose 로 추적한다.
   public networkStatus(): number {
-    throw new Error('Method not implemented.');
+    return this.client?.webSocket?.readyState ?? WebSocket.CLOSED;
   }
 }

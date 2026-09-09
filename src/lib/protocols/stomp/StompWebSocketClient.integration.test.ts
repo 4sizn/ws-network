@@ -392,14 +392,17 @@ function defineStompContract(getTarget: () => StompTarget) {
     expect(withoutProbes(bodies)).toEqual([]);
   });
 
-  // 알려진 결함. 어댑터의 `networkStatus()` 가 throw 해서 `status()` 를 쓸 수
-  // 없다. 위와 같은 규칙.
-  it.fails('reports network status', async () => {
+  it('reports the socket status', async () => {
     const client = createClient();
 
     await client.connect();
 
-    expect(client.status()).toBe(1);
+    expect(client.status()).toBe(WebSocket.OPEN);
+
+    client.disconnect();
+    await waitFor(() => client.status() === WebSocket.CLOSED);
+
+    expect(client.status()).toBe(WebSocket.CLOSED);
   });
 }
 

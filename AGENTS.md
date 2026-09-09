@@ -51,8 +51,9 @@ where a transport or protocol plugs in. Every protocol subclasses that adapter.
   The in-process servers in `*.integration.test.ts` follow the same placement
   rule: each lives in the file that uses it, even though a real server is not
   a test double.
-- Do not weaken a STOMP integration test to make it pass. The three `it.fails`
-  cases record real defects; flip them to `it` when the defect is fixed.
+- Do not weaken a STOMP integration test to make it pass. If a defect is real,
+  pin it with `it.fails` and a comment saying what is broken, then flip it to
+  `it` in the commit that fixes it.
 - Do not add a STOMP test that only the in-process broker can pass unless it
   inspects frames. Behaviour tests belong in `defineStompContract` so the real
   broker runs them too.
