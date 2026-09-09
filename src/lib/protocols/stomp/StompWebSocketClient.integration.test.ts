@@ -66,6 +66,7 @@ function startStompBroker() {
   }[] = [];
   const received: StompFrame[] = [];
   let messageId = 0;
+  let connectionCount = 0;
 
   function deliver(destination: string, body: string, contentType: string) {
     messageId += 1;
@@ -89,6 +90,7 @@ function startStompBroker() {
   }
 
   server.on('connection', (socket) => {
+    connectionCount += 1;
     socket.on('message', (data) => {
       for (const frame of parseFrames(data.toString())) {
         received.push(frame);
@@ -149,12 +151,27 @@ function startStompBroker() {
     ready,
     received,
     subscriptions,
+    // 누적 연결 수. 재연결이 실제로 새 소켓을 열었는지 본다.
+    get connectionCount() {
+      return connectionCount;
+    },
+    // 지금 열려 있는 소켓 수. 종료가 실제로 반영됐는지 본다.
+    get openConnections() {
+      return server.clients.size;
+    },
     get url() {
       const address = server.address();
       if (typeof address === 'string' || address === null) {
         throw new Error('stomp broker has no port');
       }
       return `ws://127.0.0.1:${address.port}`;
+    },
+    // 리스닝은 유지하고 클라이언트 소켓만 끊는다. 브로커 재시작이나 네트워크
+    // 절단처럼 명시적 disconnect() 가 아닌 종료를 만든다.
+    dropConnections() {
+      for (const socket of server.clients) {
+        socket.terminate();
+      }
     },
     // 브로커가 먼저 밀어주는 경로. 클라이언트 publish 를 거치지 않는다.
     publish(destination: string, body: string) {
@@ -528,6 +545,57 @@ describe('StompWebSocketClient against an in-process broker', () => {
 
     expect(connectFrame?.headers.login).toBe('tester');
     expect(connectFrame?.headers['accept-version']).toContain('1.2');
+    client.disconnect();
+  });
+
+  it('opens one broker connection when connect() is called twice', async () => {
+    const client = new StompWebSocketClient({
+      brokerURL: broker.url,
+      reconnectDelay: 0,
+    });
+
+    await Promise.all([client.connect(), client.connect()]);
+    await client.connect();
+    await delay(100);
+
+    expect(broker.connectionCount).toBe(1);
+    client.disconnect();
+  });
+
+  it('opens a new connection after an explicit disconnect', async () => {
+    const client = new StompWebSocketClient({
+      brokerURL: broker.url,
+      reconnectDelay: 0,
+    });
+
+    await client.connect();
+    client.disconnect();
+    // 새 연결이 열렸다는 것만으로는 이전 연결이 닫혔다는 증거가 안 된다.
+    await waitFor(() => broker.openConnections === 0);
+    await client.connect();
+
+    expect(broker.connectionCount).toBe(2);
+    expect(broker.openConnections).toBe(1);
+    client.disconnect();
+  });
+
+  it('reconnects after the broker drops the socket', async () => {
+    const client = new StompWebSocketClient({
+      brokerURL: broker.url,
+      reconnectDelay: 0,
+    });
+    const closed = new Promise<void>((resolve) => {
+      client.onClose(() => resolve());
+    });
+
+    await client.connect();
+    broker.dropConnections();
+    await closed;
+    await client.connect();
+
+    expect(broker.connectionCount).toBe(2);
+    expect(broker.openConnections).toBe(1);
+    expect(client.status()).toBe(WebSocket.OPEN);
     client.disconnect();
   });
 
