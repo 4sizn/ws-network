@@ -50,6 +50,28 @@ This repo is a local bundle of LLM/agent skills (mostly Markdown + a few scripts
 - Preserve the adapter-based design in `src/lib/WebSocketClient.ts` and keep worker entrypoints under `src/lib/workers/`.
 - Native WebSocket is the primary target; keep `src/lib/WebSocketClient.ts` native-only.
 - Keep STOMP isolated under `src/lib/protocols/stomp/` (opt-in). Do not reintroduce STOMP imports into the native module.
+- Tests come in three tiers: `npm test` (unit, fake, offline), `npm run
+  test:integration` (in-process aedes broker over TCP, real `mqtt` client),
+  and a manual browser tier via `VITE_MQTT_BROKER_URL`. Configs are
+  `vitest.config.ts` and `vitest.integration.config.ts`; the unit tier excludes
+  `*.integration.test.ts`.
+- The integration broker runs over TCP, not WebSocket. `aedes` served over ws
+  via `aedes-server-factory` does not complete the handshake with a real `mqtt`
+  client: the ws server never selects the required `mqtt` subprotocol, and the
+  client then fails silently with no events. Do not retry that path without
+  fixing the subprotocol AND the aedes stream bridge.
+- `src/main.ts` loads the MQTT adapter and `mqtt` with dynamic `import()` so
+  neither lands in the main bundle. Keep it that way.
+- MQTT injects the `mqtt` module instead of importing it: the adapter takes a
+  `connect` factory (`MqttConnect<TOptions>`), so `mqtt` never enters
+  `dependencies`. It is a devDependency pinned to `5.14.0` for the
+  type-compatibility test only.
+- `mqtt` drags in `@types/node@26`, which root TypeScript 4.9.5 cannot parse
+  (`skipLibCheck` does not suppress syntax errors). `package.json` pins it with
+  `overrides: { "@types/node": "^20" }`. Removing that override breaks `tsc`.
+- STOMP is unfinished. Mirror its names and field shapes, not its behavior:
+  it skips plugin hooks on connect, drops `plugins`/`logger`, never tells the
+  broker about an unsubscribe, and throws in `networkStatus()`.
 - Worker protocol should be typed and consistent; do not mix raw and typed `postMessage` payloads.
 - Route feature/refactor/incident work through the `ai-native-sdlc` skill; its artifacts live in `docs/sdlc/<slug>/`.
 

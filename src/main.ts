@@ -132,9 +132,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 연결 버튼 클릭 이벤트
   connectButton.addEventListener("click", () => {
-    initializeWebSocket();
     connectButton.disabled = true;
     disconnectButton.disabled = false;
+    void initializeWebSocket().catch((error) => {
+      statusDisplay.textContent = "연결 상태: 연결 실패";
+      statusDisplay.style.color = "red";
+      addSystemMessage("서버 연결에 실패했습니다.");
+      console.error("WebSocket connection error:", error);
+      connectButton.disabled = false;
+      disconnectButton.disabled = true;
+      client = null;
+    });
   });
 
   // 연결 끊기 버튼 클릭 이벤트
@@ -154,7 +162,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // 웹소켓 초기화 함수
-  function initializeWebSocket() {
+  async function initializeWebSocket() {
     statusDisplay.textContent = "연결 상태: 연결 시도 중...";
     statusDisplay.style.color = "blue";
     addSystemMessage("서버에 연결 시도 중...");
@@ -167,8 +175,28 @@ document.addEventListener("DOMContentLoaded", () => {
       const stompBrokerURL = import.meta.env.VITE_STOMP_BROKER_URL as
         | string
         | undefined;
+      const mqttBrokerURL = import.meta.env.VITE_MQTT_BROKER_URL as
+        | string
+        | undefined;
 
-      if (stompBrokerURL) {
+      if (mqttBrokerURL) {
+        // `mqtt` 는 이 저장소의 런타임 의존성이 아니다. 어댑터까지 동적
+        // import 로 분리해, MQTT 를 쓰지 않으면 메인 번들에 한 바이트도 들어가지
+        // 않게 한다 (opt-in).
+        const [{ MqttWebSocketClient }, { connect }] = await Promise.all([
+          import('./lib/protocols/mqtt'),
+          import('mqtt'),
+        ]);
+        const mqttClient = new MqttWebSocketClient({
+          brokerURL: mqttBrokerURL,
+          connect,
+          connectOptions: { clientId: `ws-network-demo-${Date.now()}` },
+        });
+        client = mqttClient;
+        mqttClient.subscribe('demo/chat', (message, topic) => {
+          addMessage('받음', `[${topic}] ${message}`);
+        });
+      } else if (stompBrokerURL) {
         const stompClient = new StompWebSocketClient({
           brokerURL: stompBrokerURL,
           connectHeaders: {},

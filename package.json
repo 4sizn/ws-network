@@ -10,10 +10,14 @@
     "preview": "vite preview",
     "format": "biome format --write .",
     "lint": "biome lint .",
-    "check": "biome check --apply ."
+    "check": "biome check --apply .",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:all": "npm run test && npm run test:integration"
   },
   "devDependencies": {
     "@biomejs/biome": "1.5.3",
+    "aedes": "^1.1.2",
+    "mqtt": "5.14.0",
     "typescript": "^4.6.4",
     "vite": "^3.0.7",
     "vitest": "^4.0.18"
@@ -22,5 +26,8 @@
     "@stomp/stompjs": "^7.1.1",
     "eventemitter3": "^5.0.1",
     "rxjs": "^7.8.2"
+  },
+  "overrides": {
+    "@types/node": "^20"
   }
 }
