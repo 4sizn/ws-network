@@ -28,7 +28,7 @@ where a transport or protocol plugs in. Every protocol subclasses that adapter.
 | Task | Location | Notes |
 |------|----------|-------|
 | Understand the core contract | `src/lib/WebSocketClient.ts` | Client, adapter, plugin hook order, RxJS streams.
-| Add protocol-specific send data | `WebSocketClientAdapter<TClient, TSend>` | `TSend` defaults to `void`; a protocol declares what a send needs (STOMP: `StompSendOptions`) and the core forwards it without inspecting it.
+| Add protocol-specific send data | `WebSocketClientAdapter<TClient, TSend>` | `TSend` defaults to `undefined`; a protocol declares what a send needs (STOMP: `StompSendOptions`) and the core forwards it without inspecting it.
 | Add or change a protocol | `src/lib/protocols/<name>/` | Adapter + facade + barrel. Opt-in, never imported by the core.
 | Worker entrypoints | `src/lib/workers/` | Typed `postMessage` envelopes only.
 | Run the demo | `README.md` "Demo" | Needs `server/` and `VITE_WS_URL`; STOMP path needs `npm run stomp:up` + `VITE_STOMP_BROKER_URL`.

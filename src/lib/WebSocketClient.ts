@@ -73,11 +73,12 @@ const noopLogger: WsNetworkLogger = {
   warn: () => {},
 };
 
-// 전송이 프로토콜별 정보를 요구할 때 그것을 담는 자리. `void` 면 인자가
-// 아예 없어서 네이티브 호출부는 `send('...')` 그대로다.
-type SendArgs<TSend> = TSend extends void ? [] : [options: TSend];
+// 전송이 프로토콜별 정보를 요구할 때 그것을 담는 자리. `undefined` 면 인자가
+// 아예 없어서 네이티브 호출부는 `send('...')` 그대로다. 여기서 `void` 를 쓰면
+// biome 의 noConfusingVoidType 이 막는다 — 반환 위치가 아니기 때문이다.
+type SendArgs<TSend> = TSend extends undefined ? [] : [options: TSend];
 
-interface IWebSocketClient<TSend = void> {
+interface IWebSocketClient<TSend = undefined> {
   status(): number;
   connect(): Promise<void>;
   disconnect(): void;
@@ -94,7 +95,7 @@ interface IWebSocketClient<TSend = void> {
   onConnect(callback: () => void, options?: ListenerOptions): Unsubscribe;
 }
 
-interface IWebSocketClientAdapter<TSend = void> {
+interface IWebSocketClientAdapter<TSend = undefined> {
   connect(): Promise<void>;
   disconnect(): void;
   send(data: string, ...args: SendArgs<TSend>): void;
@@ -104,7 +105,7 @@ interface IWebSocketClientAdapter<TSend = void> {
   onConnect(callback: () => void): void;
 }
 
-export abstract class WebSocketClientAdapter<TClient, TSend = void>
+export abstract class WebSocketClientAdapter<TClient, TSend = undefined>
   implements IWebSocketClientAdapter<TSend>
 {
   protected client?: TClient;
@@ -186,7 +187,7 @@ export class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSock
   }
 }
 
-export class WebSocketClient<TClient = unknown, TSend = void>
+export class WebSocketClient<TClient = unknown, TSend = undefined>
   implements IWebSocketClient<TSend>
 {
   #client: WebSocketClientAdapter<TClient, TSend>;
@@ -295,10 +296,7 @@ export class WebSocketClient<TClient = unknown, TSend = void>
     this.#plugins = [...plugins];
   }
 
-  async sendAsync(
-    message: string,
-    ...args: SendArgs<TSend>
-  ): Promise<void> {
+  async sendAsync(message: string, ...args: SendArgs<TSend>): Promise<void> {
     const transformedMessage = await this.#runBeforeSendHooks(message);
     this.#client.send(transformedMessage, ...args);
     await this.#runVoidHook('onAfterSend');

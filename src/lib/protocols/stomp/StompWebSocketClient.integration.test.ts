@@ -384,7 +384,10 @@ function defineStompContract(getTarget: () => StompTarget) {
     await client.connect();
     const bodies: string[] = [];
     client.subscribe(topic, (message) => bodies.push(message));
-    await awaitSubscription(() => client.publish(topic, PROBE), () => bodies);
+    await awaitSubscription(
+      () => client.publish(topic, PROBE),
+      () => bodies,
+    );
 
     await client.publishAsync(topic, '변환 전');
     await waitFor(() => withoutProbes(bodies).length === 1);

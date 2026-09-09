@@ -205,12 +205,12 @@ A send carries whatever the protocol requires, in a type parameter the core
 never inspects:
 
 ```ts
-class WebSocketClientAdapter<TClient, TSend = void> {
+class WebSocketClientAdapter<TClient, TSend = undefined> {
   abstract send(data: string, ...args: SendArgs<TSend>): void;
 }
 ```
 
-`TSend` defaults to `void`, so native sends stay `client.send('hello')`. STOMP
+`TSend` defaults to `undefined`, so native sends stay `client.send('hello')`. STOMP
 declares `TSend = StompSendOptions`, which makes the destination part of the
 call and part of the send pipeline:
 

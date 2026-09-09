@@ -113,3 +113,8 @@ involved, so nothing survives the revert.
 3. **The dead `publish('login', ...)` call before `connect()`** was removed from
    the demo while fixing the types. It was a no-op — the STOMP client does not
    exist until `connect()` runs.
+4. **The "no options" sentinel is `undefined`, not `void`.** `TSend extends void`
+   trips biome's `lint/suspicious/noConfusingVoidType`, which only allows `void`
+   in a return position. Caught by `npm run check` — after the first commit was
+   already pushed, so it took a follow-up commit. Step 7's verification list
+   should have run `npm run check` before committing, not after.
