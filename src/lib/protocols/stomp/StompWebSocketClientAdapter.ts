@@ -16,6 +16,17 @@ interface PubSubAble<T> {
   _isSubscribed(topic: string): boolean;
 }
 
+// 코어 발신 파이프라인이 어댑터로 넘겨주는 STOMP 전용 정보. 배열 목적지를
+// 여기서 받으므로 훅은 publish 1회당 1번만 돈다.
+export interface StompSendOptions {
+  destination: string | string[];
+  headers?: Record<string, string>;
+}
+
+const DEFAULT_SEND_HEADERS: Record<string, string> = {
+  'content-type': 'application/json',
+};
+
 export interface StompWebSocketClientAdapterOptions {
   brokerURL: string;
   connectHeaders?: Record<string, string>;
@@ -25,7 +36,7 @@ export interface StompWebSocketClientAdapterOptions {
 }
 
 export class StompWebSocketClientAdapter
-  extends WebSocketClientAdapter<StompClient>
+  extends WebSocketClientAdapter<StompClient, StompSendOptions>
   implements PubSubAble<StompSubscription>
 {
   #brokerURL: string;
@@ -86,13 +97,7 @@ export class StompWebSocketClientAdapter
   }
 
   _publish(topic: string, message: string): void {
-    this.client?.publish({
-      destination: topic,
-      body: message,
-      headers: {
-        'content-type': 'application/json',
-      },
-    });
+    this.send(message, { destination: topic });
   }
 
   public subscribe(
@@ -111,17 +116,9 @@ export class StompWebSocketClientAdapter
   public publish(
     topic: string | string[],
     message: string,
-    headers = {
-      'content-type': 'application/json',
-    },
+    headers = DEFAULT_SEND_HEADERS,
   ): void {
-    if (Array.isArray(topic)) {
-      for (const t of topic) {
-        this._publish(t, message);
-      }
-      return;
-    }
-    this.client?.publish({ destination: topic, body: message, headers });
+    this.send(message, { destination: topic, headers });
   }
 
   public isSubscribed(topic: string[] | string): boolean {
@@ -176,8 +173,15 @@ export class StompWebSocketClientAdapter
     this.client?.deactivate();
   }
 
-  public send(_data: string): void {
-    throw new Error('Method not implemented.');
+  public send(data: string, options: StompSendOptions): void {
+    const headers = options.headers ?? DEFAULT_SEND_HEADERS;
+    const destinations = Array.isArray(options.destination)
+      ? options.destination
+      : [options.destination];
+
+    for (const destination of destinations) {
+      this.client?.publish({ destination, body: data, headers });
+    }
   }
 
   public onMessage(callback: (data: string) => void): void {

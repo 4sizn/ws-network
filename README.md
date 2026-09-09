@@ -93,10 +93,8 @@ VITE_STOMP_BROKER_URL=ws://127.0.0.1:15674/ws npm run dev
 
 `VITE_STOMP_BROKER_URL` takes precedence over `VITE_WS_URL` in the demo app.
 
-That path is not wired up yet: it publishes to `login` before `connect()`
-resolves (a no-op, the STOMP client does not exist yet), and the message form
-calls `send()`, which the STOMP adapter throws on. Verify STOMP through
-`npm run test:integration` until the demo is wired.
+The demo's message form publishes to `/topic/chat` when the client is a STOMP
+client, and calls `send()` for the native one.
 
 ## Native WebSocket Usage
 
@@ -195,11 +193,36 @@ connectionSubscription.unsubscribe();
 
 ## Plugins
 
-`IWebSocketPlugin` hooks run in this order:
+`IWebSocketPlugin` hooks run in this order, on every transport:
 - connect: `onBeforeConnect` -> adapter connect -> `onAfterConnect`
 - send: `onBeforeSend` (transform chain) -> adapter send -> `onAfterSend`
 - disconnect: `onBeforeDisconnect` -> adapter disconnect -> `onAfterDisconnect`
 - inbound message: plugin `onMessage` hooks -> user listeners -> `messages$`
+
+### Send options
+
+A send carries whatever the protocol requires, in a type parameter the core
+never inspects:
+
+```ts
+class WebSocketClientAdapter<TClient, TSend = void> {
+  abstract send(data: string, ...args: SendArgs<TSend>): void;
+}
+```
+
+`TSend` defaults to `void`, so native sends stay `client.send('hello')`. STOMP
+declares `TSend = StompSendOptions`, which makes the destination part of the
+call and part of the send pipeline:
+
+```ts
+stompClient.send('hello', { destination: '/topic/chat' });
+stompClient.publish('/topic/chat', 'hello');   // facade alias for the line above
+await stompClient.publishAsync('/topic/chat', 'hello');
+```
+
+Omitting the options on a STOMP client is a compile error, and `publish()` runs
+`onBeforeSend`/`onAfterSend` like any other send. An array of destinations runs
+the hooks once and delivers the transformed body to each.
 
 ## Workers
 

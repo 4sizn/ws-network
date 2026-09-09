@@ -1,5 +1,9 @@
 export {
+  type StompSendOptions,
   StompWebSocketClientAdapter,
   type StompWebSocketClientAdapterOptions,
 } from './StompWebSocketClientAdapter';
-export { StompWebSocketClient } from './StompWebSocketClient';
+export {
+  StompWebSocketClient,
+  type StompWebSocketClientOptions,
+} from './StompWebSocketClient';

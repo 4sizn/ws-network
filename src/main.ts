@@ -1,11 +1,8 @@
-import {
-  // StompWebSocketClient,
-  // StompWebSocketClientAdapter,
-  WebSocketClient,
-  WindowWebSocketClient,
-  // WindowWebSocketClientAdapter,
-} from './lib/WebSocketClient';
+import { WindowWebSocketClient } from './lib/WebSocketClient';
 import { StompWebSocketClient } from './lib/protocols/stomp';
+
+// 데모용 STOMP 목적지. 브로커는 `npm run stomp:up` 으로 띄운다.
+const STOMP_TOPIC = '/topic/chat';
 
 // 웹소켓 채팅 페이지 구현
 
@@ -128,7 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
   applyStyles();
 
   // 웹소켓 클라이언트 관리
-  let client: WebSocketClient | null = null;
+  let client: WindowWebSocketClient | StompWebSocketClient | null = null;
 
   // 연결 버튼 클릭 이벤트
   connectButton.addEventListener('click', () => {
@@ -174,7 +171,6 @@ document.addEventListener('DOMContentLoaded', () => {
           connectHeaders: {},
         });
         client = stompClient;
-        stompClient.publish('login', '로그인 요청');
       } else {
         if (!wsUrl) {
           throw new Error(
@@ -247,7 +243,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const message = textarea.value.trim();
     if (message && client) {
-      client.send(message);
+      // STOMP 는 목적지가 필요하다. 코어 send 는 목적지를 모른다.
+      if (client instanceof StompWebSocketClient) {
+        client.publish(STOMP_TOPIC, message);
+      } else {
+        client.send(message);
+      }
       addMessage('보냄', message);
       textarea.value = '';
     } else if (!client) {

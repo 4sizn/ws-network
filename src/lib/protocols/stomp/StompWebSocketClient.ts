@@ -1,21 +1,26 @@
 import { Client as StompClient } from '@stomp/stompjs';
-import { WebSocketClient } from '../../WebSocketClient';
 import {
+  WebSocketClient,
+  type WebSocketClientOptions,
+} from '../../WebSocketClient';
+import {
+  type StompSendOptions,
   StompWebSocketClientAdapter,
   type StompWebSocketClientAdapterOptions,
 } from './StompWebSocketClientAdapter';
 
-export class StompWebSocketClient extends WebSocketClient<StompClient> {
-  constructor(options: StompWebSocketClientAdapterOptions) {
-    super(new StompWebSocketClientAdapter(options));
-  }
+export type StompWebSocketClientOptions = StompWebSocketClientAdapterOptions &
+  WebSocketClientOptions;
 
-  connect(): Promise<void> {
-    return this.client.connect();
-  }
-
-  disconnect() {
-    this.client.disconnect();
+export class StompWebSocketClient extends WebSocketClient<
+  StompClient,
+  StompSendOptions
+> {
+  constructor(options: StompWebSocketClientOptions) {
+    super(new StompWebSocketClientAdapter(options), {
+      plugins: options.plugins,
+      logger: options.logger,
+    });
   }
 
   private get adapter(): StompWebSocketClientAdapter {
@@ -23,7 +28,11 @@ export class StompWebSocketClient extends WebSocketClient<StompClient> {
   }
 
   publish(topic: string | string[], message: string): void {
-    this.adapter.publish(topic, message);
+    this.send(message, { destination: topic });
+  }
+
+  publishAsync(topic: string | string[], message: string): Promise<void> {
+    return this.sendAsync(message, { destination: topic });
   }
 
   subscribe(

@@ -2,7 +2,7 @@
 
 - **Spec:** `docs/sdlc/stomp-facade-plugins/spec.md`
 - **Date:** 2026-09-09
-- **Status:** draft
+- **Status:** done
 
 **Goal:** `onBeforeSend`/`onAfterSend` run for every transport, including STOMP
 publishes, without the core learning what a destination is.
@@ -97,4 +97,19 @@ involved, so nothing survives the revert.
 
 ## Deviations
 
-(filled during implementation)
+1. **`StompSendOptions.destination` accepts `string | string[]`,** not just
+   `string` as the spec sketched. The spec required the hooks to run once per
+   `publish()` call even for an array of topics; letting the adapter fan out is
+   the only way to do that with a single `sendAsync` call.
+2. **`src/main.ts` had to change,** which step 2's canary said should not happen.
+   The cause was not the `TSend` default: the demo held its client in the base
+   type (`let client: WebSocketClient | null`), and a client that requires send
+   options is genuinely not substitutable for one that does not — the same
+   unsoundness that got `send()` overloading rejected. The owner chose the union
+   type plus a `publish` branch in the form handler (5 lines), over widening
+   `TSend` to `any` in the demo or relaxing `SendArgs` to an optional parameter
+   (which would have discarded AC6). Side effect: the demo's STOMP path now
+   actually sends, where before it called a `send()` that threw.
+3. **The dead `publish('login', ...)` call before `connect()`** was removed from
+   the demo while fixing the types. It was a no-op — the STOMP client does not
+   exist until `connect()` runs.

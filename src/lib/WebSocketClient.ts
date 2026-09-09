@@ -73,11 +73,15 @@ const noopLogger: WsNetworkLogger = {
   warn: () => {},
 };
 
-interface IWebSocketClient {
+// 전송이 프로토콜별 정보를 요구할 때 그것을 담는 자리. `void` 면 인자가
+// 아예 없어서 네이티브 호출부는 `send('...')` 그대로다.
+type SendArgs<TSend> = TSend extends void ? [] : [options: TSend];
+
+interface IWebSocketClient<TSend = void> {
   status(): number;
   connect(): Promise<void>;
   disconnect(): void;
-  send(message: string): void;
+  send(message: string, ...args: SendArgs<TSend>): void;
   onMessage(
     callback: (message: string) => void,
     options?: ListenerOptions,
@@ -90,23 +94,23 @@ interface IWebSocketClient {
   onConnect(callback: () => void, options?: ListenerOptions): Unsubscribe;
 }
 
-interface IWebSocketClientAdapter {
+interface IWebSocketClientAdapter<TSend = void> {
   connect(): Promise<void>;
   disconnect(): void;
-  send(data: string): void;
+  send(data: string, ...args: SendArgs<TSend>): void;
   onMessage(callback: (data: string) => void): void;
   onError(callback: (error: Error) => void): void;
   onClose(callback: () => void): void;
   onConnect(callback: () => void): void;
 }
 
-export abstract class WebSocketClientAdapter<T>
-  implements IWebSocketClientAdapter
+export abstract class WebSocketClientAdapter<TClient, TSend = void>
+  implements IWebSocketClientAdapter<TSend>
 {
-  protected client?: T;
+  protected client?: TClient;
   public abstract connect(): Promise<void>;
   public abstract disconnect(): void;
-  public abstract send(data: string): void;
+  public abstract send(data: string, ...args: SendArgs<TSend>): void;
   public abstract onMessage(callback: (data: string) => void): void;
   public abstract onError(callback: (error: Error) => void): void;
   public abstract onClose(callback: () => void): void;
@@ -182,8 +186,10 @@ export class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSock
   }
 }
 
-export class WebSocketClient<T = unknown> implements IWebSocketClient {
-  #client: WebSocketClientAdapter<T>;
+export class WebSocketClient<TClient = unknown, TSend = void>
+  implements IWebSocketClient<TSend>
+{
+  #client: WebSocketClientAdapter<TClient, TSend>;
   #plugins: IWebSocketPlugin[];
   #logger: WsNetworkLogger;
   #messageListeners: Set<(message: string) => void>;
@@ -200,7 +206,7 @@ export class WebSocketClient<T = unknown> implements IWebSocketClient {
   public readonly closed$: Observable<void>;
 
   constructor(
-    client: WebSocketClientAdapter<T>,
+    client: WebSocketClientAdapter<TClient, TSend>,
     options?: WebSocketClientOptions,
   ) {
     this.#client = client;
@@ -249,8 +255,8 @@ export class WebSocketClient<T = unknown> implements IWebSocketClient {
     });
   }
 
-  send(message: string): void {
-    void this.sendAsync(message).catch((error) => {
+  send(message: string, ...args: SendArgs<TSend>): void {
+    void this.sendAsync(message, ...args).catch((error) => {
       this.#logger.warn('[WebSocketClient] sendAsync failed', error);
     });
   }
@@ -289,9 +295,12 @@ export class WebSocketClient<T = unknown> implements IWebSocketClient {
     this.#plugins = [...plugins];
   }
 
-  async sendAsync(message: string): Promise<void> {
+  async sendAsync(
+    message: string,
+    ...args: SendArgs<TSend>
+  ): Promise<void> {
     const transformedMessage = await this.#runBeforeSendHooks(message);
-    this.#client.send(transformedMessage);
+    this.#client.send(transformedMessage, ...args);
     await this.#runVoidHook('onAfterSend');
   }
 

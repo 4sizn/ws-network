@@ -28,6 +28,7 @@ where a transport or protocol plugs in. Every protocol subclasses that adapter.
 | Task | Location | Notes |
 |------|----------|-------|
 | Understand the core contract | `src/lib/WebSocketClient.ts` | Client, adapter, plugin hook order, RxJS streams.
+| Add protocol-specific send data | `WebSocketClientAdapter<TClient, TSend>` | `TSend` defaults to `void`; a protocol declares what a send needs (STOMP: `StompSendOptions`) and the core forwards it without inspecting it.
 | Add or change a protocol | `src/lib/protocols/<name>/` | Adapter + facade + barrel. Opt-in, never imported by the core.
 | Worker entrypoints | `src/lib/workers/` | Typed `postMessage` envelopes only.
 | Run the demo | `README.md` "Demo" | Needs `server/` and `VITE_WS_URL`; STOMP path needs `npm run stomp:up` + `VITE_STOMP_BROKER_URL`.
@@ -35,7 +36,7 @@ where a transport or protocol plugs in. Every protocol subclasses that adapter.
 | Verify STOMP against a real broker | `docker-compose.test.yml` + `WS_NETWORK_STOMP_URL` | `defineStompContract` runs the same tests on both brokers; skipped when the variable is unset.
 | Find available skills | `.agents/skills/` | Each subdir is one skill.
 | Take work from idea to merge | `.agents/skills/ai-native-sdlc/SKILL.md` | Stage loop + `intent.md`/`spec.md`/`plan.md` templates.
-| See SDLC artifacts in flight | `docs/sdlc/<slug>/` | `stomp-facade-plugins` is the live one: intent accepted, spec awaiting the owner's choice of approach.
+| See SDLC artifacts in flight | `docs/sdlc/<slug>/` | `stomp-facade-plugins` is the live one: intent and spec accepted, plan approved and implemented.
 | Learn a skill's trigger + instructions | `.agents/skills/<skill>/SKILL.md` | YAML frontmatter name/description + body.
 | React/Next perf guidelines (compiled) | `.agents/skills/vercel-react-best-practices/AGENTS.md` | Large generated doc; use as reference.
 | Remotion guidance | `.agents/skills/remotion-best-practices/rules/` | Topic-based rule files.

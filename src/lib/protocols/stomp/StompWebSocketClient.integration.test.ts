@@ -2,7 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type WebSocket as NodeWebSocket, WebSocketServer } from 'ws';
 
-import { WebSocketClient } from '../../WebSocketClient';
+import {
+  WebSocketClient,
+  type WebSocketClientOptions,
+} from '../../WebSocketClient';
 import { StompWebSocketClient } from './StompWebSocketClient';
 import { StompWebSocketClientAdapter } from './StompWebSocketClientAdapter';
 
@@ -231,12 +234,15 @@ function defineStompContract(getTarget: () => StompTarget) {
     tracked = undefined;
   });
 
-  function createClient(): StompWebSocketClient {
+  function createClient(
+    options?: WebSocketClientOptions,
+  ): StompWebSocketClient {
     const target = getTarget();
     const client = new StompWebSocketClient({
       brokerURL: target.url,
       connectHeaders: target.connectHeaders,
       reconnectDelay: 0,
+      ...options,
     });
     tracked = client;
     return client;
@@ -320,6 +326,72 @@ function defineStompContract(getTarget: () => StompTarget) {
     client.disconnect();
 
     await closed;
+  });
+
+  it('runs connect and disconnect hooks for a facade client', async () => {
+    const calls: string[] = [];
+    const client = createClient({
+      plugins: [
+        {
+          name: 'RecordingPlugin',
+          onBeforeConnect: () => {
+            calls.push('onBeforeConnect');
+          },
+          onAfterConnect: () => {
+            calls.push('onAfterConnect');
+          },
+          onBeforeDisconnect: () => {
+            calls.push('onBeforeDisconnect');
+          },
+          onAfterDisconnect: () => {
+            calls.push('onAfterDisconnect');
+          },
+        },
+      ],
+    });
+
+    await client.connect();
+    await client.disconnectAsync();
+
+    expect(calls).toEqual([
+      'onBeforeConnect',
+      'onAfterConnect',
+      'onBeforeDisconnect',
+      'onAfterDisconnect',
+    ]);
+  });
+
+  it('runs send hooks on publish and delivers the transformed body', async () => {
+    const calls: string[] = [];
+    const client = createClient({
+      plugins: [
+        {
+          name: 'TransformingPlugin',
+          // 구독 준비를 확인하는 프로브는 변환하지 않는다. 그래야
+          // `awaitSubscription` 과 `withoutProbes` 가 그대로 동작한다.
+          onBeforeSend: (data) => {
+            calls.push('onBeforeSend');
+            return data === PROBE ? data : `${data}!`;
+          },
+          onAfterSend: () => {
+            calls.push('onAfterSend');
+          },
+        },
+      ],
+    });
+    const topic = uniqueTopic('send-hooks');
+
+    await client.connect();
+    const bodies: string[] = [];
+    client.subscribe(topic, (message) => bodies.push(message));
+    await awaitSubscription(() => client.publish(topic, PROBE), () => bodies);
+
+    await client.publishAsync(topic, '변환 전');
+    await waitFor(() => withoutProbes(bodies).length === 1);
+
+    expect(withoutProbes(bodies)).toEqual(['변환 전!']);
+    expect(calls).toContain('onBeforeSend');
+    expect(calls).toContain('onAfterSend');
   });
 
   it('runs plugin hooks when the adapter is composed with WebSocketClient', async () => {
