@@ -66,6 +66,7 @@ function startStompBroker() {
   }[] = [];
   const received: StompFrame[] = [];
   let messageId = 0;
+  let connectionCount = 0;
 
   function deliver(destination: string, body: string, contentType: string) {
     messageId += 1;
@@ -89,6 +90,7 @@ function startStompBroker() {
   }
 
   server.on('connection', (socket) => {
+    connectionCount += 1;
     socket.on('message', (data) => {
       for (const frame of parseFrames(data.toString())) {
         received.push(frame);
@@ -149,6 +151,9 @@ function startStompBroker() {
     ready,
     received,
     subscriptions,
+    get connectionCount() {
+      return connectionCount;
+    },
     get url() {
       const address = server.address();
       if (typeof address === 'string' || address === null) {
@@ -528,6 +533,34 @@ describe('StompWebSocketClient against an in-process broker', () => {
 
     expect(connectFrame?.headers.login).toBe('tester');
     expect(connectFrame?.headers['accept-version']).toContain('1.2');
+    client.disconnect();
+  });
+
+  it('opens one broker connection when connect() is called twice', async () => {
+    const client = new StompWebSocketClient({
+      brokerURL: broker.url,
+      reconnectDelay: 0,
+    });
+
+    await Promise.all([client.connect(), client.connect()]);
+    await client.connect();
+    await delay(100);
+
+    expect(broker.connectionCount).toBe(1);
+    client.disconnect();
+  });
+
+  it('opens a new connection after an explicit disconnect', async () => {
+    const client = new StompWebSocketClient({
+      brokerURL: broker.url,
+      reconnectDelay: 0,
+    });
+
+    await client.connect();
+    client.disconnect();
+    await client.connect();
+
+    expect(broker.connectionCount).toBe(2);
     client.disconnect();
   });
 

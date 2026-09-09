@@ -46,6 +46,10 @@ export class StompWebSocketClientAdapter
   #reconnectDelay: number;
 
   protected client?: StompClient;
+  // connect() 는 호출마다 새 StompClient 를 만들었다. 두 번 부르면 첫 것이
+  // 고아가 되어 reconnectDelay 마다 재연결을 계속 시도했다. 명시적
+  // disconnect() 까지 같은 약속을 돌려준다.
+  #connectPromise?: Promise<void>;
   subscriptions: Record<string, StompSubscription> = {};
   onConnectCallback: (() => void) | undefined;
   onMessageCallback: (data: string) => void = () => {};
@@ -133,6 +137,11 @@ export class StompWebSocketClientAdapter
   }
 
   public connect(): Promise<void> {
+    this.#connectPromise ??= this.#activate();
+    return this.#connectPromise;
+  }
+
+  #activate(): Promise<void> {
     return new Promise((resolve) => {
       this.client = new StompClient({
         brokerURL: this.#brokerURL,
@@ -170,6 +179,9 @@ export class StompWebSocketClientAdapter
   }
 
   public disconnect(): void {
+    // deactivate 된 클라이언트는 되살릴 수 없다. 약속도 같이 버려서 다음
+    // connect() 가 새 클라이언트를 만들게 한다.
+    this.#connectPromise = undefined;
     this.client?.deactivate();
   }
 
