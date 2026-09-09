@@ -24,10 +24,12 @@ Canonical skill directory. Each subdirectory is one installable skill; other too
 | Vercel React/Next perf rules | `.agents/skills/vercel-react-best-practices/` | `AGENTS.md` is the expanded guide; `rules/` is per-rule.
 | Remotion rules | `.agents/skills/remotion-best-practices/rules/` | One topic per file.
 | Skill creation + eval harness | `.agents/skills/skill-creator/` | Scripts + reviewer UI.
+| SDLC loop (intent/spec/plan -> PR -> maintain) | `.agents/skills/ai-native-sdlc/` | Locally authored; `templates/` holds the artifact skeletons.
 
 ## CONVENTIONS
 - Keep `SKILL.md` actionable: point to `rules/` / `references/` instead of embedding everything.
 - Prefer adding new guidance as a new file under `rules/` / `references/` and linking from `SKILL.md`.
+- Locally authored skills (e.g. `ai-native-sdlc`) are intentionally absent from `skills-lock.json`; that file pins upstream GitHub sources only.
 
 ## ANTI-PATTERNS
 - Avoid duplicating content across multiple skills; link/reference instead.
