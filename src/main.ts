@@ -164,11 +164,21 @@ document.addEventListener('DOMContentLoaded', () => {
       const stompBrokerURL = import.meta.env.VITE_STOMP_BROKER_URL as
         | string
         | undefined;
+      const stompLogin = import.meta.env.VITE_STOMP_LOGIN as string | undefined;
+      const stompPasscode = import.meta.env.VITE_STOMP_PASSCODE as
+        | string
+        | undefined;
 
       if (stompBrokerURL) {
+        // 자격증명을 주지 않으면 stompjs 가 guest/guest 로 CONNECT 한다.
+        // RabbitMQ 는 컨테이너 밖에서 오는 guest 를 거부하므로, 데모도
+        // 계정을 받아야 실제 브로커에 붙는다.
         const stompClient = new StompWebSocketClient({
           brokerURL: stompBrokerURL,
-          connectHeaders: {},
+          connectHeaders:
+            stompLogin && stompPasscode
+              ? { login: stompLogin, passcode: stompPasscode }
+              : {},
         });
         client = stompClient;
       } else {
