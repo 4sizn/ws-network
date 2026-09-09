@@ -30,7 +30,9 @@ where a transport or protocol plugs in. Every protocol subclasses that adapter.
 | Understand the core contract | `src/lib/WebSocketClient.ts` | Client, adapter, plugin hook order, RxJS streams.
 | Add or change a protocol | `src/lib/protocols/<name>/` | Adapter + facade + barrel. Opt-in, never imported by the core.
 | Worker entrypoints | `src/lib/workers/` | Typed `postMessage` envelopes only.
-| Run the demo | `README.md` "Demo" | Needs `server/` and `VITE_WS_URL`.
+| Run the demo | `README.md` "Demo" | Needs `server/` and `VITE_WS_URL`; STOMP path needs `npm run stomp:up` + `VITE_STOMP_BROKER_URL`.
+| Verify a transport end to end | `src/**/*.integration.test.ts` | Real server in-process on an ephemeral port. Tiers split in `vitest.config.ts`.
+| Verify STOMP against a real broker | `docker-compose.test.yml` + `WS_NETWORK_STOMP_URL` | `defineStompContract` runs the same tests on both brokers; skipped when the variable is unset.
 | Find available skills | `.agents/skills/` | Each subdir is one skill.
 | Take work from idea to merge | `.agents/skills/ai-native-sdlc/SKILL.md` | Stage loop + `intent.md`/`spec.md`/`plan.md` templates.
 | Learn a skill's trigger + instructions | `.agents/skills/<skill>/SKILL.md` | YAML frontmatter name/description + body.
@@ -46,6 +48,14 @@ where a transport or protocol plugs in. Every protocol subclasses that adapter.
   native-WebSocket-only.
 - Do not put test doubles in non-`.test.ts` files. Declare them inside the test
   file, the way `FakeAdapter` is declared in `src/lib/WebSocketClient.test.ts`.
+  The in-process servers in `*.integration.test.ts` follow the same placement
+  rule: each lives in the file that uses it, even though a real server is not
+  a test double.
+- Do not weaken a STOMP integration test to make it pass. The three `it.fails`
+  cases record real defects; flip them to `it` when the defect is fixed.
+- Do not add a STOMP test that only the in-process broker can pass unless it
+  inspects frames. Behaviour tests belong in `defineStompContract` so the real
+  broker runs them too.
 - Do not invent naming suffixes. Grep the neighbouring declarations first.
   The patterns actually in the tree, with their sample counts:
   - client/adapter/plugin contracts take an `I` prefix — `IWebSocketPlugin`,
@@ -74,16 +84,20 @@ where a transport or protocol plugs in. Every protocol subclasses that adapter.
 
 ```bash
 npm ci                    # install exactly what the lockfile pins
-npm test                  # unit tests (vitest)
+npm test                  # unit tier (vitest project `unit`)
+npm run test:integration  # integration tier (in-process ws/STOMP servers)
+npm run test:integration:broker  # same STOMP contract against RabbitMQ (needs stomp:up)
+npm run stomp:up          # docker compose (colima): RabbitMQ Web-STOMP on 15674
+npm run stomp:down        # tear it down
 npm run lint              # biome lint (does not check formatting)
 npm run format            # biome format --write
 npm run build             # tsc + vite build
 npm run dev               # demo app
 ```
 
-CI runs install, lint, unit tests, integration tests when the script exists,
-and build, plus a separate job that builds `server/`:
-`.github/workflows/ci.yml`.
+CI runs install, lint, unit tests, integration tests (the `test:integration`
+script now exists, so the guarded step runs it), and build, plus a separate job
+that builds `server/`: `.github/workflows/ci.yml`.
 
 **CI does not gate formatting yet, on purpose.** `npm run lint` is
 `biome lint`, which ignores formatting, and `biome check .` currently reports
