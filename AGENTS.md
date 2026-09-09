@@ -23,6 +23,7 @@ This repo is a local bundle of LLM/agent skills (mostly Markdown + a few scripts
 | Task | Location | Notes |
 |------|----------|-------|
 | Find available skills | `.agents/skills/` | Each subdir is one skill.
+| Take work from idea to merge | `.agents/skills/ai-native-sdlc/SKILL.md` | Stage loop + `intent.md`/`spec.md`/`plan.md` templates.
 | Learn a skill's trigger + instructions | `.agents/skills/<skill>/SKILL.md` | YAML frontmatter name/description + body.
 | React/Next perf guidelines (compiled) | `.agents/skills/vercel-react-best-practices/AGENTS.md` | Large generated doc; use as reference.
 | Remotion guidance | `.agents/skills/remotion-best-practices/rules/` | Topic-based rule files.
@@ -50,6 +51,7 @@ This repo is a local bundle of LLM/agent skills (mostly Markdown + a few scripts
 - Native WebSocket is the primary target; keep `src/lib/WebSocketClient.ts` native-only.
 - Keep STOMP isolated under `src/lib/protocols/stomp/` (opt-in). Do not reintroduce STOMP imports into the native module.
 - Worker protocol should be typed and consistent; do not mix raw and typed `postMessage` payloads.
+- Route feature/refactor/incident work through the `ai-native-sdlc` skill; its artifacts live in `docs/sdlc/<slug>/`.
 
 ## COMMANDS
 ```bash
