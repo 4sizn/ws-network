@@ -27,6 +27,16 @@ const DEFAULT_SEND_HEADERS: Record<string, string> = {
   'content-type': 'application/json',
 };
 
+function toStompError(frame: unknown): Error {
+  const body = (frame as { body?: unknown }).body;
+  return new Error(typeof body === 'string' ? body : 'STOMP error');
+}
+
+function toSocketError(event: unknown): Error {
+  const type = (event as { type?: unknown }).type ?? '';
+  return new Error(`WebSocket error: ${type}`);
+}
+
 export interface StompWebSocketClientAdapterOptions {
   brokerURL: string;
   connectHeaders?: Record<string, string>;
@@ -142,57 +152,73 @@ export class StompWebSocketClientAdapter
   }
 
   #activate(): Promise<void> {
-    // 이전 인스턴스가 남아 있으면 여기서 정리한다. 이게 없으면 어느 경로로든
-    // 재활성화될 때 고아가 다시 생긴다.
-    this.client?.deactivate();
+    this.#releaseClient();
 
     return new Promise((resolve) => {
-      this.client = new StompClient({
-        brokerURL: this.#brokerURL,
-        heartbeatIncoming: this.#heartbeatIncoming,
-        heartbeatOutgoing: this.#heartbeatOutgoing,
-        reconnectDelay: this.#reconnectDelay,
-        connectHeaders: this.#connectHeaders,
-      });
-
-      this.client.activate();
-      this.client.onConnect = () => {
-        this.onConnectCallback?.();
-        resolve();
-      };
-      this.client.onStompError = (frame) => {
-        const body = (frame as { body?: unknown }).body;
-        const message = typeof body === 'string' ? body : 'STOMP error';
-        this.onErrorCallback?.(new Error(message));
-      };
-
-      this.client.onWebSocketError = (event) => {
-        this.onErrorCallback?.(
-          new Error(
-            `WebSocket error: ${(event as { type?: unknown }).type ?? ''}`,
-          ),
-        );
-      };
-      this.client.onWebSocketClose = () => {
-        // stompjs 는 소켓이 끊기면 active 상태에서 재연결을 예약한다. 단
-        // reconnectDelay 가 0 이면 예약이 없는데도 상태는 active 로 남는다.
-        // 그 경우 약속을 버려야 다음 connect() 가 실제로 다시 붙는다.
-        if (!this.client?.active || this.#reconnectDelay === 0) {
-          this.#connectPromise = undefined;
-        }
-        this.onCloseCallback?.();
-      };
-      this.client.onDisconnect = () => {
-        this.onCloseCallback?.();
-      };
+      const client = this.#createClient();
+      this.#bindLifecycle(client, resolve);
+      this.client = client;
+      client.activate();
     });
+  }
+
+  #createClient(): StompClient {
+    return new StompClient({
+      brokerURL: this.#brokerURL,
+      heartbeatIncoming: this.#heartbeatIncoming,
+      heartbeatOutgoing: this.#heartbeatOutgoing,
+      reconnectDelay: this.#reconnectDelay,
+      connectHeaders: this.#connectHeaders,
+    });
+  }
+
+  #bindLifecycle(client: StompClient, onConnected: () => void): void {
+    client.onConnect = () => {
+      this.onConnectCallback?.();
+      onConnected();
+    };
+    client.onStompError = (frame) => {
+      this.onErrorCallback?.(toStompError(frame));
+    };
+    client.onWebSocketError = (event) => {
+      this.onErrorCallback?.(toSocketError(event));
+    };
+    client.onWebSocketClose = () => {
+      this.#handleSocketClosed(client);
+    };
+    client.onDisconnect = () => {
+      this.onCloseCallback?.();
+    };
+  }
+
+  #handleSocketClosed(client: StompClient): void {
+    // 이미 교체된 클라이언트의 뒤늦은 close 는 현재 연결 상태를 건드리면 안
+    // 된다. 통지만 하고 약속은 그대로 둔다.
+    if (client === this.client && !this.#reconnectsItself(client)) {
+      this.#forgetConnection();
+    }
+    this.onCloseCallback?.();
+  }
+
+  // stompjs 는 소켓이 끊기면 active 상태에서 재연결을 예약하지만, 실제 예약은
+  // `_nextReconnectDelay > 0` 일 때만 걸린다. 그래서 둘 다 봐야 한다.
+  #reconnectsItself(client: StompClient): boolean {
+    return client.active && this.#reconnectDelay > 0;
+  }
+
+  #forgetConnection(): void {
+    this.#connectPromise = undefined;
+  }
+
+  #releaseClient(): void {
+    this.client?.deactivate();
   }
 
   public disconnect(): void {
     // deactivate 된 클라이언트는 되살릴 수 없다. 약속도 같이 버려서 다음
     // connect() 가 새 클라이언트를 만들게 한다.
-    this.#connectPromise = undefined;
-    this.client?.deactivate();
+    this.#forgetConnection();
+    this.#releaseClient();
   }
 
   public send(data: string, options: StompSendOptions): void {

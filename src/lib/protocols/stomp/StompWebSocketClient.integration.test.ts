@@ -579,6 +579,43 @@ describe('StompWebSocketClient against an in-process broker', () => {
     client.disconnect();
   });
 
+  it('ignores a close from a client it already replaced', async () => {
+    const client = new StompWebSocketClient({
+      brokerURL: broker.url,
+      reconnectDelay: 0,
+    });
+
+    await client.connect();
+    // close 이벤트를 기다리지 않고 곧바로 새 연결을 만든다. 낡은 클라이언트의
+    // close 는 새 클라이언트가 자리를 잡은 뒤에 도착한다.
+    client.disconnect();
+    await client.connect();
+    await delay(200);
+    await client.connect();
+
+    expect(broker.connectionCount).toBe(2);
+    expect(client.status()).toBe(WebSocket.OPEN);
+    client.disconnect();
+  });
+
+  it('treats a non-positive reconnectDelay as no auto-reconnect', async () => {
+    const client = new StompWebSocketClient({
+      brokerURL: broker.url,
+      reconnectDelay: -1,
+    });
+    const closed = new Promise<void>((resolve) => {
+      client.onClose(() => resolve());
+    });
+
+    await client.connect();
+    broker.dropConnections();
+    await closed;
+    await client.connect();
+
+    expect(broker.connectionCount).toBe(2);
+    client.disconnect();
+  });
+
   it('reconnects after the broker drops the socket', async () => {
     const client = new StompWebSocketClient({
       brokerURL: broker.url,
