@@ -1,7 +1,14 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.5.3/schema.json",
   "files": {
-    "ignore": ["dist/**", "server/dist/**"]
+    "ignore": [
+      "dist/**",
+      "server/dist/**",
+      ".agent/**",
+      ".agents/**",
+      ".claude/**",
+      ".cline/**"
+    ]
   },
   "organizeImports": {
     "enabled": true
@@ -22,7 +29,7 @@
   "javascript": {
     "formatter": {
       "quoteStyle": "single",
-      "trailingComma": "es5"
+      "trailingComma": "all"
     }
   }
 }

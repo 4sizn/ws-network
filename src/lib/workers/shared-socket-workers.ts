@@ -1,28 +1,29 @@
 /// <reference lib="webworker" />
 declare const self: SharedWorkerGlobalScope;
 
-import { WindowWebSocketClient } from "../WebSocketClient";
+import { WindowWebSocketClient } from '../WebSocketClient';
 
 type SharedWorkerOutboundMessage =
-  | { type: "CONNECTED" }
-  | { type: "MESSAGE"; data: string }
-  | { type: "ERROR"; error: string }
-  | { type: "CLOSED" }
-  | { type: "PONG" };
+  | { type: 'CONNECTED' }
+  | { type: 'MESSAGE'; data: string }
+  | { type: 'ERROR'; error: string }
+  | { type: 'CLOSED' }
+  | { type: 'PONG' };
 
 type SharedWorkerInboundMessage =
-  | { type: "PING" }
-  | { type: "SEND"; data: string };
+  | { type: 'PING' }
+  | { type: 'SEND'; data: string };
 
 const ports: MessagePort[] = [];
 
 const wsUrl =
-  new URL(self.location.href).searchParams.get("wsUrl") ??
-  (import.meta as unknown as { env?: { VITE_WS_URL?: string } }).env?.VITE_WS_URL;
+  new URL(self.location.href).searchParams.get('wsUrl') ??
+  (import.meta as unknown as { env?: { VITE_WS_URL?: string } }).env
+    ?.VITE_WS_URL;
 
 if (!wsUrl) {
   throw new Error(
-    'Missing WebSocket URL. Provide `?wsUrl=...` in worker URL or set `VITE_WS_URL`.'
+    'Missing WebSocket URL. Provide `?wsUrl=...` in worker URL or set `VITE_WS_URL`.',
   );
 }
 
@@ -38,20 +39,20 @@ let connected = false;
 
 client.onConnect(() => {
   connected = true;
-  broadcast({ type: "CONNECTED" });
+  broadcast({ type: 'CONNECTED' });
 });
 
 client.onMessage((message) => {
-  broadcast({ type: "MESSAGE", data: message });
+  broadcast({ type: 'MESSAGE', data: message });
 });
 
 client.onError((error) => {
-  broadcast({ type: "ERROR", error: error.message });
+  broadcast({ type: 'ERROR', error: error.message });
 });
 
 client.onClose(() => {
   connected = false;
-  broadcast({ type: "CLOSED" });
+  broadcast({ type: 'CLOSED' });
 });
 
 function ensureConnected(): void {
@@ -73,27 +74,29 @@ self.onconnect = (event: MessageEvent) => {
   port.onmessage = (event: MessageEvent) => {
     const data = event.data as unknown;
 
-    if (data === "ping") {
-      port.postMessage({ type: "PONG" } satisfies SharedWorkerOutboundMessage);
+    if (data === 'ping') {
+      port.postMessage({ type: 'PONG' } satisfies SharedWorkerOutboundMessage);
       return;
     }
 
-    if (typeof data === "object" && data !== null) {
+    if (typeof data === 'object' && data !== null) {
       const message = data as Partial<SharedWorkerInboundMessage>;
 
-      if (message.type === "PING") {
-        port.postMessage({ type: "PONG" } satisfies SharedWorkerOutboundMessage);
+      if (message.type === 'PING') {
+        port.postMessage({
+          type: 'PONG',
+        } satisfies SharedWorkerOutboundMessage);
         return;
       }
 
-      if (message.type === "SEND" && typeof message.data === "string") {
+      if (message.type === 'SEND' && typeof message.data === 'string') {
         ensureConnected();
         client.send(message.data);
         return;
       }
     }
 
-    if (typeof data === "string") {
+    if (typeof data === 'string') {
       ensureConnected();
       client.send(data);
     }

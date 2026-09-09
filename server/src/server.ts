@@ -14,7 +14,7 @@ const config: ServerConfig = {
 const wss = new WebSocket.Server(config);
 
 console.log(
-  `WebSocket 서버가 ws://localhost:${config.port} 에서 실행 중입니다`
+  `WebSocket 서버가 ws://localhost:${config.port} 에서 실행 중입니다`,
 );
 
 // 클라이언트 연결 처리

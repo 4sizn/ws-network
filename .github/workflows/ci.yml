@@ -37,6 +37,10 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # 포맷까지 게이트한다. `biome lint` 는 포맷을 보지 않으므로 별 스텝이다.
+      - name: Format check
+        run: npm run check
+
       - name: Unit tests
         run: npm test
 

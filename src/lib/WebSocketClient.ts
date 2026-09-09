@@ -137,18 +137,18 @@ export class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSock
       if (!this.client) {
         this.client = new WebSocket(this.#url);
       }
-      this.client.addEventListener("open", () => {
+      this.client.addEventListener('open', () => {
         this.#logger.log(this.constructor.name, 'open');
         this.onConnectCallback();
         resolve();
       });
-      this.client.addEventListener("message", (event) => {
+      this.client.addEventListener('message', (event) => {
         this.onMessageCallback(event.data);
       });
-      this.client.addEventListener("error", (event) => {
+      this.client.addEventListener('error', (event) => {
         this.onErrorCallback(event as unknown as Error);
       });
-      this.client.addEventListener("close", () => {
+      this.client.addEventListener('close', () => {
         this.onCloseCallback();
       });
     });
@@ -221,7 +221,10 @@ export class WebSocketClient<T = unknown> implements IWebSocketClient {
 
     this.#client.onMessage((message: string) => {
       void this.#handleIncomingMessage(message).catch((error) => {
-        this.#logger.warn('[WebSocketClient] handleIncomingMessage failed', error);
+        this.#logger.warn(
+          '[WebSocketClient] handleIncomingMessage failed',
+          error,
+        );
       });
     });
     this.#client.onError((error: Error) => {
@@ -375,7 +378,10 @@ export class WebSocketClient<T = unknown> implements IWebSocketClient {
       try {
         listener(error);
       } catch (listenerError) {
-        this.#logger.warn('[WebSocketClient] onError listener threw', listenerError);
+        this.#logger.warn(
+          '[WebSocketClient] onError listener threw',
+          listenerError,
+        );
       }
     }
 

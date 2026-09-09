@@ -106,7 +106,9 @@ describe('WebSocketClient', () => {
     const listener = vi.fn();
     const controller = new AbortController();
 
-    const unsubscribe = client.onMessage(listener, { signal: controller.signal });
+    const unsubscribe = client.onMessage(listener, {
+      signal: controller.signal,
+    });
     adapter.emitMessage('before-abort');
 
     await vi.waitFor(() => {
@@ -130,7 +132,9 @@ describe('WebSocketClient', () => {
     const controller = new AbortController();
 
     controller.abort();
-    const unsubscribe = client.onMessage(listener, { signal: controller.signal });
+    const unsubscribe = client.onMessage(listener, {
+      signal: controller.signal,
+    });
 
     adapter.emitMessage('ignored');
     await Promise.resolve();

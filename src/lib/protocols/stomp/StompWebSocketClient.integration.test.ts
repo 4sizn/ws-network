@@ -261,7 +261,10 @@ function defineStompContract(getTarget: () => StompTarget) {
 
     const bodies: string[] = [];
     client.subscribe(topic, (message) => bodies.push(message));
-    await awaitSubscription(() => client.publish(topic, PROBE), () => bodies);
+    await awaitSubscription(
+      () => client.publish(topic, PROBE),
+      () => bodies,
+    );
 
     client.publish(topic, '안녕');
     await waitFor(() => withoutProbes(bodies).length === 1);
@@ -278,7 +281,10 @@ function defineStompContract(getTarget: () => StompTarget) {
 
     const bodies: string[] = [];
     client.subscribe(topics, (message) => bodies.push(message));
-    await awaitSubscription(() => client.publish(topics, PROBE), () => bodies);
+    await awaitSubscription(
+      () => client.publish(topics, PROBE),
+      () => bodies,
+    );
 
     client.publish(topics, '둘 다');
     await waitFor(() => withoutProbes(bodies).length === 2);
@@ -294,7 +300,10 @@ function defineStompContract(getTarget: () => StompTarget) {
     await client.connect();
     const bodies: string[] = [];
     client.subscribe(topic, (message) => bodies.push(message));
-    await awaitSubscription(() => client.publish(topic, PROBE), () => bodies);
+    await awaitSubscription(
+      () => client.publish(topic, PROBE),
+      () => bodies,
+    );
 
     client.unsubscribe(topic);
 
@@ -343,7 +352,10 @@ function defineStompContract(getTarget: () => StompTarget) {
 
     await composed.connect();
     adapter.subscribe(topic, () => {});
-    await awaitSubscription(() => adapter.publish(topic, PROBE), () => inbound);
+    await awaitSubscription(
+      () => adapter.publish(topic, PROBE),
+      () => inbound,
+    );
 
     adapter.publish(topic, '플러그인까지');
     await waitFor(() => withoutProbes(inbound).length === 1);
@@ -383,7 +395,10 @@ function defineStompContract(getTarget: () => StompTarget) {
     await client.connect();
     const bodies: string[] = [];
     client.subscribe(topic, (message) => bodies.push(message));
-    await awaitSubscription(() => client.publish(topic, PROBE), () => bodies);
+    await awaitSubscription(
+      () => client.publish(topic, PROBE),
+      () => bodies,
+    );
 
     client.unsubscribe(topic);
     client.publish(topic, '구독 해제 후');

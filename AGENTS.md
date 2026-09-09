@@ -91,6 +91,8 @@ npm run test:integration:broker  # same STOMP contract against RabbitMQ (needs s
 npm run stomp:up          # docker compose (colima): RabbitMQ Web-STOMP on 15674
 npm run stomp:down        # tear it down
 npm run lint              # biome lint (does not check formatting)
+npm run check             # biome check . — lint + format gate, same as CI
+npm run check:apply       # biome check --apply . — fix what it can
 npm run format            # biome format --write
 npm run build             # tsc + vite build
 npm run dev               # demo app
@@ -100,12 +102,12 @@ CI runs install, lint, unit tests, integration tests (the `test:integration`
 script now exists, so the guarded step runs it), and build, plus a separate job
 that builds `server/`: `.github/workflows/ci.yml`.
 
-**CI does not gate formatting yet, on purpose.** `npm run lint` is
-`biome lint`, which ignores formatting, and `biome check .` currently reports
-42 errors (`opencode.json`, `src/lib/utils.ts`, `src/main.ts`). Adding the gate
-means reformatting those files first, and `src/main.ts` is being edited by an
-open PR. Add the gate — `npm run check` or a check-only `biome` step — right
-after that PR merges, in a commit that does the reformat at the same time.
+**CI gates formatting.** `npm run lint` is `biome lint`, which ignores
+formatting, so a separate `npm run check` step runs `biome check .`. Two things
+had to change before the gate could go in: `javascript.formatter.trailingComma`
+was `es5` while every file in the tree uses trailing commas (now `all`), and
+`files.ignore` did not cover the vendored skill bundle, so biome was checking
+`.agents/skills/**/*.tsx`. Run `npm run check:apply` to fix violations locally.
 
 ## AGENT SKILLS BUNDLE
 
