@@ -127,6 +127,11 @@ export class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSock
   onErrorCallback: (error: Error) => void;
   onCloseCallback: () => void;
 
+  // connect() 는 소켓이 없을 때만 새로 만들고, 열려 있으면 같은 약속을
+  // 돌려준다. 이게 없으면 이미 열린 소켓에 open 리스너를 다시 달아 약속이
+  // 영원히 정착하지 않는다.
+  #connectPromise?: Promise<void>;
+
   constructor(options: { url: string; logger?: WsNetworkLogger }) {
     super();
     this.#url = options.url;
@@ -138,27 +143,49 @@ export class WindowWebSocketClientAdapter extends WebSocketClientAdapter<WebSock
   }
   connect(): Promise<void> {
     this.#logger.log(this.constructor.name, 'connect');
+    this.#connectPromise ??= this.#open();
+    return this.#connectPromise;
+  }
+
+  #open(): Promise<void> {
     return new Promise((resolve) => {
-      if (!this.client) {
-        this.client = new WebSocket(this.#url);
-      }
-      this.client.addEventListener('open', () => {
-        this.#logger.log(this.constructor.name, 'open');
-        this.onConnectCallback();
-        resolve();
-      });
-      this.client.addEventListener('message', (event) => {
-        this.onMessageCallback(event.data);
-      });
-      this.client.addEventListener('error', (event) => {
-        this.onErrorCallback(event as unknown as Error);
-      });
-      this.client.addEventListener('close', () => {
-        this.onCloseCallback();
-      });
+      const socket = new WebSocket(this.#url);
+      this.#bindLifecycle(socket, resolve);
+      this.client = socket;
     });
   }
+
+  #bindLifecycle(socket: WebSocket, onOpened: () => void): void {
+    socket.addEventListener('open', () => {
+      this.#logger.log(this.constructor.name, 'open');
+      this.onConnectCallback();
+      onOpened();
+    });
+    socket.addEventListener('message', (event) => {
+      this.onMessageCallback(event.data);
+    });
+    socket.addEventListener('error', (event) => {
+      this.onErrorCallback(event as unknown as Error);
+    });
+    socket.addEventListener('close', () => {
+      this.#handleClosed(socket);
+    });
+  }
+
+  #handleClosed(socket: WebSocket): void {
+    // 이미 교체된 소켓의 뒤늦은 close 는 현재 연결을 건드리면 안 된다.
+    if (socket === this.client) {
+      this.#forgetConnection();
+    }
+    this.onCloseCallback();
+  }
+
+  #forgetConnection(): void {
+    this.#connectPromise = undefined;
+  }
+
   disconnect() {
+    this.#forgetConnection();
     this.client?.close();
   }
 
