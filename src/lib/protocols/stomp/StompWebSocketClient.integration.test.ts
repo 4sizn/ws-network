@@ -315,7 +315,9 @@ function defineStompContract(getTarget: () => StompTarget) {
 
   it('runs plugin hooks when the adapter is composed with WebSocketClient', async () => {
     const target = getTarget();
+    const topic = uniqueTopic('plugin');
     const calls: string[] = [];
+    const inbound: string[] = [];
     const adapter = new StompWebSocketClientAdapter({
       brokerURL: target.url,
       connectHeaders: target.connectHeaders,
@@ -331,29 +333,36 @@ function defineStompContract(getTarget: () => StompTarget) {
           onAfterConnect: () => {
             calls.push('onAfterConnect');
           },
+          onMessage: (data) => {
+            inbound.push(data);
+          },
         },
       ],
     });
     tracked = composed;
 
     await composed.connect();
+    adapter.subscribe(topic, () => {});
+    await awaitSubscription(() => adapter.publish(topic, PROBE), () => inbound);
+
+    adapter.publish(topic, '플러그인까지');
+    await waitFor(() => withoutProbes(inbound).length === 1);
 
     expect(calls).toEqual(['onBeforeConnect', 'onAfterConnect']);
+    expect(withoutProbes(inbound)).toEqual(['플러그인까지']);
   });
 
-  // 알려진 결함. 어댑터가 구독 콜백을 직접 호출하고 `onMessageCallback` 을
-  // 절대 호출하지 않아서, 코어의 `onMessage` 리스너와 `messages$` 가 STOMP
-  // 에서는 영구히 조용하다. 결함이 고쳐지면 이 테스트가 통과해 red 가 된다 —
-  // 그때 `it.fails` 를 `it` 로 바꾼다.
-  it.fails('feeds inbound messages into the core listener', async () => {
+  it('feeds inbound messages into the core listener', async () => {
     const client = createClient();
     const topic = uniqueTopic('core');
 
     await client.connect();
 
     const fromCore: string[] = [];
+    const fromStream: string[] = [];
     const fromSubscription: string[] = [];
     client.onMessage((message) => fromCore.push(message));
+    client.messages$.subscribe((message) => fromStream.push(message));
     client.subscribe(topic, (message) => fromSubscription.push(message));
     await awaitSubscription(
       () => client.publish(topic, PROBE),
@@ -361,9 +370,10 @@ function defineStompContract(getTarget: () => StompTarget) {
     );
 
     client.publish(topic, '코어까지');
-    await waitFor(() => withoutProbes(fromSubscription).length === 1);
+    await waitFor(() => withoutProbes(fromCore).length === 1);
 
     expect(withoutProbes(fromCore)).toEqual(['코어까지']);
+    expect(withoutProbes(fromStream)).toEqual(['코어까지']);
   });
 
   // 알려진 결함. `_unsubscribe` 가 `subscriptions` 레코드에서만 지우고 STOMP

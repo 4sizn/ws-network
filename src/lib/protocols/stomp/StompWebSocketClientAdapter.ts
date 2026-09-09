@@ -67,7 +67,11 @@ export class StompWebSocketClientAdapter
   _subscribe(topic: string, callback: (message: string) => void): void {
     const subscription = this.client?.subscribe(topic, (message) => {
       const body = (message as { body?: unknown }).body;
-      callback(typeof body === 'string' ? body : '');
+      const data = typeof body === 'string' ? body : '';
+      callback(data);
+      // 구독 콜백만 부르면 코어의 onMessage 리스너, messages$, 플러그인
+      // onMessage 훅이 STOMP 에서는 아무것도 받지 못한다.
+      this.onMessageCallback(data);
     });
     if (subscription) {
       this.subscriptions[topic] = subscription;
