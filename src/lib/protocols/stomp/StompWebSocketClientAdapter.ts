@@ -79,6 +79,9 @@ export class StompWebSocketClientAdapter
   }
 
   _unsubscribe(topic: string): void {
+    // 레코드만 지우면 브로커는 계속 보낸다. STOMP UNSUBSCRIBE 프레임은
+    // 구독 객체가 보낸다.
+    this.subscriptions[topic]?.unsubscribe();
     delete this.subscriptions[topic];
   }
 
