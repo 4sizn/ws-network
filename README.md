@@ -88,10 +88,17 @@ The demo app's STOMP path takes `VITE_STOMP_BROKER_URL`, and the broker from
 
 ```bash
 npm run stomp:up
-VITE_STOMP_BROKER_URL=ws://127.0.0.1:15674/ws npm run dev
+VITE_STOMP_BROKER_URL=ws://127.0.0.1:15674/ws \
+VITE_STOMP_LOGIN=test VITE_STOMP_PASSCODE=test npm run dev
 ```
 
 `VITE_STOMP_BROKER_URL` takes precedence over `VITE_WS_URL` in the demo app.
+
+`VITE_STOMP_LOGIN` and `VITE_STOMP_PASSCODE` become the CONNECT credentials.
+Both must be set, or the demo sends no credentials and `@stomp/stompjs` falls
+back to `guest`/`guest`, which RabbitMQ refuses from outside the container
+(`Access refused for user 'guest'`). The compose broker's account is
+`test`/`test`.
 
 The demo's message form publishes to `/topic/chat` when the client is a STOMP
 client, and calls `send()` for the native one.
