@@ -35,6 +35,7 @@ where a transport or protocol plugs in. Every protocol subclasses that adapter.
 | Verify STOMP against a real broker | `docker-compose.test.yml` + `WS_NETWORK_STOMP_URL` | `defineStompContract` runs the same tests on both brokers; skipped when the variable is unset.
 | Find available skills | `.agents/skills/` | Each subdir is one skill.
 | Take work from idea to merge | `.agents/skills/ai-native-sdlc/SKILL.md` | Stage loop + `intent.md`/`spec.md`/`plan.md` templates.
+| See SDLC artifacts in flight | `docs/sdlc/<slug>/` | `stomp-facade-plugins` is the live one: intent accepted, spec awaiting the owner's choice of approach.
 | Learn a skill's trigger + instructions | `.agents/skills/<skill>/SKILL.md` | YAML frontmatter name/description + body.
 | React/Next perf guidelines (compiled) | `.agents/skills/vercel-react-best-practices/AGENTS.md` | Large generated doc; use as reference.
 | Remotion guidance | `.agents/skills/remotion-best-practices/rules/` | Topic-based rule files.
