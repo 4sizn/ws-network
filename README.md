@@ -1,5 +1,23 @@
 # ws-network
 
+> [!WARNING]
+> **DEPRECATED — 2026-09-10. This repository is no longer maintained.**
+>
+> Use [**ws-pack**](https://github.com/4sizn/ws-pack) instead. It is the
+> maintained successor and carries the controller-level reconnect, subscription
+> and plugin design that this repository never grew.
+>
+> No further features, fixes or releases will land here. The branches that were
+> still open when this repository was frozen are listed, with their disposition,
+> in [`docs/MIGRATION.md`](docs/MIGRATION.md) — read that before you copy
+> anything out of this tree.
+>
+> What ws-pack does **not** yet carry from here, and what you therefore lose by
+> migrating, is recorded in the same document. The largest item is the test
+> suite: this repository has 1,056 lines of unit and integration tests plus a CI
+> gate; ws-pack has neither yet.
+
+
 Native browser WebSocket client with an adapter-based design.
 
 Notes:

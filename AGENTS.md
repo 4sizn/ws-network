@@ -1,5 +1,19 @@
 # ws-network
 
+## DEPRECATED — DO NOT ADD FEATURES HERE
+
+This repository was deprecated on 2026-09-10. The maintained successor is
+**ws-pack** (`https://github.com/4sizn/ws-pack`, checked out locally at
+`../ws-pack`).
+
+If you were asked to add a feature, fix a defect, or refactor the library, stop
+and confirm the target repository first. Work belongs in ws-pack unless the
+request is explicitly about archiving, migrating, or documenting this tree.
+
+The only changes still welcome here are deprecation notices, migration notes,
+and history-preserving records. `docs/MIGRATION.md` records what moved to
+ws-pack, what did not, and the disposition of every branch left open.
+
 A browser WebSocket client library with an adapter-based design. Native
 WebSocket is the primary target; other protocols are opt-in and isolated.
 
