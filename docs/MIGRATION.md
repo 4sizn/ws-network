@@ -125,6 +125,35 @@ The MQTT work is the single largest unmigrated asset in this repository: about
 4,473 lines of implementation, tests and specification that no other repository
 holds.
 
+### Disposition decided on 2026-09-10
+
+The unmerged work is **preserved, not migrated**. Both open tips are tagged, so
+they stay reachable and named after this repository is archived — an archived
+GitHub repository keeps every ref, it only stops accepting writes:
+
+| Tag | Commit | Was |
+|---|---|---|
+| `archive/mqtt-protocol` | `7772bf9` | tip of `feat/mqtt-protocol` and `feat/mqtt-worker`, which had identical trees |
+| `archive/stomp-connect-rejection` | `787f10d` | tip of `4sizn/stomp-connect-rejection` |
+
+`feat/mqtt-worker` existed only locally and was pushed before archiving, so no
+tip is left on one machine.
+
+To retrieve the MQTT work later:
+
+```bash
+git clone https://github.com/4sizn/ws-network.git
+git -C ws-network checkout archive/mqtt-protocol
+```
+
+Porting it to ws-pack was **not** done and is not scheduled. ws-pack moved the
+plugin pipeline and the listener registry out of the client and into a
+controller, so this adapter does not drop in — the port is a rewrite against
+`MqttWebSocketController`, not a file copy. Until someone does that,
+`MqttWebSocketClient` in ws-pack stays a constructor around a `TODO` adapter,
+and this tag is the only working MQTT implementation in any of the three
+repositories.
+
 ## If you need something out of this tree
 
 Read the file here, then reimplement it against ws-pack's
