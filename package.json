@@ -2,6 +2,8 @@
   "name": "ws-network",
   "private": true,
   "version": "0.0.0",
+  "description": "DEPRECATED - use ws-pack (https://github.com/4sizn/ws-pack) instead.",
+  "deprecated": "ws-network is deprecated as of 2026-09-10. Use ws-pack: https://github.com/4sizn/ws-pack",
   "type": "module",
   "scripts": {
     "dev": "vite",
