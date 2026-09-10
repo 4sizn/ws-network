@@ -146,7 +146,22 @@ export class StompWebSocketClientAdapter
     // 재활성화될 때 고아가 다시 생긴다.
     this.client?.deactivate();
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      // 약속은 한 번만 정착한다. 연결 전 실패는 거절이고, 연결된 뒤의 오류는
+      // onError 로만 간다.
+      let settled = false;
+      const fail = (error: Error) => {
+        this.onErrorCallback?.(error);
+        if (settled) {
+          return;
+        }
+        settled = true;
+        // 거절한 약속을 들고 있으면 다음 connect() 가 새 시도 없이 같은
+        // 거절만 되돌려준다.
+        this.#connectPromise = undefined;
+        reject(error);
+      };
+
       this.client = new StompClient({
         brokerURL: this.#brokerURL,
         heartbeatIncoming: this.#heartbeatIncoming,
@@ -157,27 +172,33 @@ export class StompWebSocketClientAdapter
 
       this.client.activate();
       this.client.onConnect = () => {
+        settled = true;
         this.onConnectCallback?.();
         resolve();
       };
       this.client.onStompError = (frame) => {
         const body = (frame as { body?: unknown }).body;
         const message = typeof body === 'string' ? body : 'STOMP error';
-        this.onErrorCallback?.(new Error(message));
+        fail(new Error(message));
       };
 
       this.client.onWebSocketError = (event) => {
-        this.onErrorCallback?.(
+        fail(
           new Error(
             `WebSocket error: ${(event as { type?: unknown }).type ?? ''}`,
           ),
         );
       };
       this.client.onWebSocketClose = () => {
-        // stompjs 는 소켓이 끊기면 active 상태에서 재연결을 예약한다. 단
-        // reconnectDelay 가 0 이면 예약이 없는데도 상태는 active 로 남는다.
-        // 그 경우 약속을 버려야 다음 connect() 가 실제로 다시 붙는다.
-        if (!this.client?.active || this.#reconnectDelay === 0) {
+        if (!settled) {
+          // CONNECTED 전에 닫히면 이 시도는 실패다. 브로커가 ERROR 프레임도
+          // 오류 이벤트도 없이 닫으면 여기가 유일한 신호다. fail() 이
+          // 약속도 버린다.
+          fail(new Error('WebSocket closed before the STOMP session opened'));
+        } else if (!this.client?.active || this.#reconnectDelay === 0) {
+          // stompjs 는 소켓이 끊기면 active 상태에서 재연결을 예약한다. 단
+          // reconnectDelay 가 0 이면 예약이 없는데도 상태는 active 로 남는다.
+          // 그 경우 약속을 버려야 다음 connect() 가 실제로 다시 붙는다.
           this.#connectPromise = undefined;
         }
         this.onCloseCallback?.();

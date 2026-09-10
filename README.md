@@ -37,6 +37,13 @@ not stopping broker delivery, `status()` throwing) are fixed. `status()` on a
 STOMP client reports the underlying socket state, the same meaning it has on the
 native client — not the STOMP session state, which `onConnect`/`onClose` track.
 
+`connect()` settles once per attempt. It resolves on CONNECTED, and rejects when
+the attempt fails: a STOMP `ERROR` frame (refused credentials), a socket error,
+or a close before the session opens. A rejected attempt is discarded, so the
+next `connect()` opens a new connection instead of replaying the same rejection.
+Failures after the session is open reach `onError` only; the promise has already
+settled.
+
 ### Real broker tier (docker)
 
 The in-process STOMP broker is written in this repo, so it cannot prove

@@ -232,9 +232,16 @@ document.addEventListener('DOMContentLoaded', () => {
         client = null;
       });
 
-      client.connect().then(() => {
-        console.log('연결 성공');
-      });
+      client.connect().then(
+        () => {
+          console.log('연결 성공');
+        },
+        // connect() 는 실패한 시도에서 거절한다. 화면은 onError 가 이미
+        // 되돌려 놓는다. 여기서 받지 않으면 unhandled rejection 이 된다.
+        (error) => {
+          console.error('WebSocket connection error:', error);
+        },
+      );
     } catch (error) {
       statusDisplay.textContent = '연결 상태: 연결 실패';
       statusDisplay.style.color = 'red';

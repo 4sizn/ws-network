@@ -19,6 +19,9 @@ interface StompFrame {
 interface StompTarget {
   url: string;
   connectHeaders: Record<string, string>;
+  // 브로커가 반드시 거절하는 자격 증명. 거절 경로도 계약이라 두 티어에서
+  // 같이 돈다.
+  refusedConnectHeaders: Record<string, string>;
 }
 
 // 실제 브로커 티어는 URL 이 주어질 때만 돈다. `npm run stomp:up` 이
@@ -52,12 +55,22 @@ function serializeFrame(frame: StompFrame): string {
   return [frame.command, ...headerLines, '', `${frame.body}\0`].join('\n');
 }
 
+// 인프로세스 브로커가 아는 유일한 계정.
+const ACCEPTED_LOGIN = 'tester';
+
+// 인프로세스 브로커에만 넣을 수 있는 고장. RabbitMQ 는 요구한다고 이렇게
+// 끊어주지 않는다.
+interface BrokerFaults {
+  // CONNECT 를 받고 ERROR 프레임도 없이 소켓을 닫는다.
+  closeOnConnect?: boolean;
+}
+
 // 인프로세스 STOMP 1.2 브로커. 테스트 더블이 아니라 실제 프레임을 말하는
 // 서버다. CONNECT / SUBSCRIBE / UNSUBSCRIBE / SEND / DISCONNECT 만 다룬다.
 // 이 클라이언트가 쓰는 프레임이 그것뿐이다. 프레임 문법을 내가 직접 구현한
 // 만큼, 이 브로커만으로는 상호운용을 증명하지 못한다 — 그래서 같은 계약을
 // 실제 RabbitMQ 에도 돌린다.
-function startStompBroker() {
+function startStompBroker(options: BrokerFaults = {}) {
   const server = new WebSocketServer({ port: 0 });
   const subscriptions: {
     socket: NodeWebSocket;
@@ -96,6 +109,27 @@ function startStompBroker() {
         received.push(frame);
 
         if (frame.command === 'CONNECT' || frame.command === 'STOMP') {
+          if (options.closeOnConnect) {
+            socket.close();
+            continue;
+          }
+          // 실제 브로커처럼 계정을 본다. login 을 보내면서 아는 계정이
+          // 아니면 ERROR 프레임을 주고 소켓을 닫는다. login 없이 붙는
+          // 테스트는 예전 그대로 통과한다.
+          if (
+            frame.headers.login !== undefined &&
+            frame.headers.login !== ACCEPTED_LOGIN
+          ) {
+            socket.send(
+              serializeFrame({
+                command: 'ERROR',
+                headers: { message: 'Bad CONNECT' },
+                body: 'Access refused for user',
+              }),
+            );
+            socket.close();
+            continue;
+          }
           socket.send(
             serializeFrame({
               command: 'CONNECTED',
@@ -264,6 +298,37 @@ function defineStompContract(getTarget: () => StompTarget) {
     tracked = client;
     return client;
   }
+
+  // 브로커가 거절할 자격 증명으로 붙는 클라이언트. reconnectDelay 가 0 이라
+  // 재시도 없이 한 번의 시도로 끝난다.
+  function createRefusedClient(): StompWebSocketClient {
+    const target = getTarget();
+    const client = new StompWebSocketClient({
+      brokerURL: target.url,
+      connectHeaders: target.refusedConnectHeaders,
+      reconnectDelay: 0,
+    });
+    tracked = client;
+    return client;
+  }
+
+  // connect() 의 약속은 성공에서만 정착했다. 브로커가 자격 증명을 거절하면
+  // 어떤 경로로도 정착하지 않아 await connect() 가 영원히 매달렸다.
+  it('rejects connect() when the broker refuses the credentials', async () => {
+    const client = createRefusedClient();
+
+    await expect(client.connect()).rejects.toThrow();
+  });
+
+  // 거절된 약속을 계속 들고 있으면 다음 connect() 는 실제 시도를 하지 않고
+  // 같은 거절만 되돌려준다. 새 시도가 실제로 일어나야 한다.
+  it('retries the connection after a refused connect()', async () => {
+    const client = createRefusedClient();
+
+    await expect(client.connect()).rejects.toThrow();
+
+    await expect(client.connect()).rejects.toThrow();
+  });
 
   it('completes the CONNECT handshake and fires onConnect', async () => {
     const client = createClient();
@@ -527,7 +592,8 @@ describe('StompWebSocketClient against an in-process broker', () => {
 
   defineStompContract(() => ({
     url: broker.url,
-    connectHeaders: { login: 'tester' },
+    connectHeaders: { login: ACCEPTED_LOGIN },
+    refusedConnectHeaders: { login: 'intruder' },
   }));
 
   // 프레임을 들여다보는 테스트는 인프로세스 브로커에서만 가능하다.
@@ -599,6 +665,26 @@ describe('StompWebSocketClient against an in-process broker', () => {
     client.disconnect();
   });
 
+  // 계약이 아니라 고장 주입이다. 브로커가 아무 말 없이 닫으면 onStompError
+  // 도 onWebSocketError 도 안 뜬다. 그때 약속을 정착시키는 신호는 소켓
+  // 닫힘뿐이다. RabbitMQ 로는 이 상황을 요구할 수 없어 인프로세스 티어에만
+  // 둔다.
+  it('rejects connect() when the socket closes before CONNECTED', async () => {
+    const silent = startStompBroker({ closeOnConnect: true });
+    await silent.ready;
+    const client = new StompWebSocketClient({
+      brokerURL: silent.url,
+      reconnectDelay: 0,
+    });
+
+    try {
+      await expect(client.connect()).rejects.toThrow();
+    } finally {
+      client.disconnect();
+      await silent.close();
+    }
+  });
+
   it('delivers a broker-initiated message to a subscriber', async () => {
     const client = new StompWebSocketClient({
       brokerURL: broker.url,
@@ -626,6 +712,7 @@ describe.skipIf(!realBrokerUrl)(
       url: realBrokerUrl as string,
       // docker-compose.test.yml 이 만드는 계정.
       connectHeaders: { login: 'test', passcode: 'test' },
+      refusedConnectHeaders: { login: 'intruder', passcode: 'wrong' },
     }));
   },
 );
